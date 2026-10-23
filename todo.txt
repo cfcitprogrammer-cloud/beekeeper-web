@@ -1,0 +1,279 @@
+Feed
+AI
+Announcements
+
+Employees
+- Dashboard
+- Employee Directory
+ - View
+- Organization Chart
+- Policies
+- Disciplinary
+- Configuration
+
+Attendances
+- Dashboard
+
+Leaves
+- Dashboard
+- My Leave Requests
+- Leave Requests
+- Leave Balances
+- Configuration
+
+Recruitment
+- Dashboard
+- Recruitment Pipeline
+- Candidates
+- Interviews
+- Job Openings
+- Configuration
+
+Performance
+- KPI
+
+Assets
+- Dashboard
+- Assets
+
+Help Desk
+- Dashboard
+- Tickets
+- My Tickets
+
+Reports
+
+Inventory
+- Dashboard
+- My Inventory
+- My Bad Orders
+- Inventories
+- Bad Orders
+
+Visits
+- Dashboard
+- My Visits
+- My Visit Plans
+- Visit Plans
+- Visits
+
+- Create Plan
+- Create Visits
+
+
+
+Expenses
+- Dashboard
+- My Expenses
+- My Expense Reports
+- My liquidation
+- My Cash Advances
+- My Travel Expense Requests
+- My BDF
+- Expenses
+- Expense Reports
+- Cash Advance Request
+- Travel Expense Request
+- Liquidation
+- BDF
+
+Outlets
+- Dashboard
+- Outlets
+ - Delete
+ - View
+
+- Assigned Outlet
+- Outlet Assignment
+
+Bookings
+- Dashboard
+- Overview
+- My Bookings
+- Bookings
+
+Production
+- Dashboard
+- My Daily Reports
+- My Production Entries
+- Daily Reports
+- Production Entries
+
+
+ - List
+ - Update 
+ - New
+ - Delete
+ - View
+
+
+
+
+
+
+  console.log("BACKEND RECEIVED FILTERS:", params.columnFilters)
+
+  // 1. GLOBAL FILTER (Searches across multiple columns using OR)
+  if (params.globalFilter) {
+    query = query.or(
+      `name.ilike.%${params.globalFilter}%,code.ilike.%${params.globalFilter}%`
+    )
+  }
+
+  // 2. NEW: COLUMN-SPECIFIC FILTERS (Searches specific columns using AND)
+  if (params.columnFilters && params.columnFilters.length > 0) {
+    params.columnFilters.forEach((filter) => {
+      const { id, value } = filter
+
+      // 1. Handle basic string payload (from default text inputs)
+      if (typeof value === "string") {
+        query = query.ilike(id, `%${value}%`)
+        return
+      }
+
+      // 2. TypeScript now strictly knows `value` is one of our object payloads
+      switch (value.operator) {
+        case "range":
+          if (
+            value.min !== null &&
+            value.min !== undefined &&
+            value.min !== ""
+          ) {
+            query = query.gte(id, value.min)
+          }
+          if (
+            value.max !== null &&
+            value.max !== undefined &&
+            value.max !== ""
+          ) {
+            query = query.lte(id, value.max)
+          }
+          break
+
+        case "in":
+          query = query.in(id, value.values)
+          break
+
+        case "eq":
+          query = query.eq(id, value.value)
+          break
+
+        case "ilike":
+          query = query.ilike(id, `%${String(value.value)}%`)
+          break
+      }
+    })
+  }
+
+  // 3. SORTING
+  if (params.sorting && params.sorting.length > 0) {
+    const sort = params.sorting[0]
+    // If the sort is on the manager relation, Supabase handles it slightly differently,
+    // but standard columns will sort perfectly here:
+    query = query.order(sort.id, { ascending: !sort.desc })
+  } else {
+    query = query.order("created_at", { ascending: false })
+  }
+
+  // 4. PAGINATION
+  const from = params.pageIndex * params.pageSize
+  const to = from + params.pageSize - 1
+  query = query.range(from, to)
+
+  const { data, error, count } = await query
+  if (error) throw new Error(error.message)
+
+  return { data, rowCount: count || 0 }
+
+
+
+
+
+-------------------------------------ACTION----------------
+
+
+// ==========================================
+// 1. FETCH ALL EMPLOYEES (PAGINATED)
+// ==========================================
+export async function fetchEmployeesAction(params: FetchEmployeesParams) {
+  const ability = await getServerAbility()
+  if (ability.cannot("read", "employees")) {
+    throw new Error("Forbidden: You do not have permission to view employees.")
+  }
+
+  const supabase = await createClient()
+
+  let query = supabase.from("employees").select("*", { count: "exact" })
+
+  console.log("BACKEND RECEIVED FILTERS:", params.columnFilters)
+
+  // 1. GLOBAL FILTER (Searches across multiple columns using OR)
+  if (params.globalFilter) {
+    query = query.or(
+      `employee_no.ilike.%${params.globalFilter}%,first_name.ilike.%${params.globalFilter}%,last_name.ilike.%${params.globalFilter}%,email.ilike.%${params.globalFilter}%`
+    )
+  }
+
+  // 2. COLUMN-SPECIFIC FILTERS (Searches specific columns using AND)
+  if (params.columnFilters && params.columnFilters.length > 0) {
+    params.columnFilters.forEach((filter) => {
+      const { id, value } = filter
+
+      // 1. Handle basic string payload (from default text inputs)
+      if (typeof value === "string") {
+        query = query.ilike(id, `%${value}%`)
+        return
+      }
+
+      // 2. TypeScript now strictly knows `value` is one of our object payloads
+      switch (value.operator) {
+        case "range":
+          if (
+            value.min !== null &&
+            value.min !== undefined &&
+            value.min !== ""
+          ) {
+            query = query.gte(id, value.min)
+          }
+          if (
+            value.max !== null &&
+            value.max !== undefined &&
+            value.max !== ""
+          ) {
+            query = query.lte(id, value.max)
+          }
+          break
+
+        case "in":
+          query = query.in(id, value.values)
+          break
+
+        case "eq":
+          query = query.eq(id, value.value)
+          break
+
+        case "ilike":
+          query = query.ilike(id, `%${String(value.value)}%`)
+          break
+      }
+    })
+  }
+
+  // 3. SORTING
+  if (params.sorting && params.sorting.length > 0) {
+    const sort = params.sorting[0]
+    query = query.order(sort.id, { ascending: !sort.desc })
+  } else {
+    query = query.order("created_at", { ascending: false })
+  }
+
+  // 4. PAGINATION
+  const from = params.pageIndex * params.pageSize
+  const to = from + params.pageSize - 1
+  query = query.range(from, to)
+
+  const { data, error, count } = await query
+  if (error) throw new Error(error.message)
+
+  return { data, rowCount: count || 0 }
+}

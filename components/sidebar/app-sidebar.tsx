@@ -14,12 +14,18 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import {
+  BriefcaseIcon,
+  CalendarIcon,
+  ClockIcon,
+  FoldersIcon,
   Frame,
   GalleryVerticalEndIcon,
+  PresentationLineChartIcon,
   SquareTerminalIcon,
   UsersIcon,
 } from "@hugeicons/core-free-icons"
 import FrameIcon from "@hugeicons/core-free-icons/FrameIcon"
+import { NavEmployeeManagement } from "./nav-employee-management"
 
 // This is sample data.
 const data = {
@@ -33,6 +39,148 @@ const data = {
       name: "Acme Inc",
       logo: Frame,
       plan: "Enterprise",
+    },
+  ],
+  navEmployeeManagement: [
+    {
+      title: "Employees",
+      url: "#",
+      icon: UsersIcon,
+      isActive: true,
+      items: [
+        {
+          title: "Dashboard",
+          url: "#",
+        },
+        {
+          title: "Employee Directory",
+          url: "#",
+        },
+        {
+          title: "Organization Chart",
+          url: "#",
+        },
+        {
+          title: "Policies",
+          url: "#",
+        },
+        {
+          title: "Disciplinary Actions",
+          url: "#",
+        },
+        {
+          title: "Configuration",
+          url: "#",
+        },
+      ],
+    },
+    {
+      title: "Attendances",
+      url: "#",
+      icon: ClockIcon,
+      isActive: true,
+      items: [
+        {
+          title: "Dashboard",
+          url: "#",
+        },
+        {
+          title: "My Attendance",
+          url: "#",
+        },
+        {
+          title: "Attendance Logs",
+          url: "#",
+        },
+      ],
+    },
+    {
+      title: "Leaves",
+      url: "#",
+      icon: CalendarIcon,
+      isActive: true,
+      items: [
+        {
+          title: "Dashboard",
+          url: "#",
+        },
+        {
+          title: "Request Leave",
+          url: "#",
+        },
+        {
+          title: "My Leave Requests",
+          url: "#",
+        },
+        {
+          title: "Leave Requests",
+          url: "#",
+        },
+        {
+          title: "Leave Balances",
+          url: "#",
+        },
+      ],
+    },
+    {
+      title: "Recruitment",
+      url: "#",
+      icon: BriefcaseIcon,
+      isActive: true,
+      items: [
+        {
+          title: "Dashboard",
+          url: "#",
+        },
+        {
+          title: "Recruitment Pipeline",
+          url: "#",
+        },
+        {
+          title: "Candidates",
+          url: "#",
+        },
+        {
+          title: "Interviews",
+          url: "#",
+        },
+        {
+          title: "Job Openings",
+          url: "#",
+        },
+        {
+          title: "Configuration",
+          url: "#",
+        },
+      ],
+    },
+    {
+      title: "Assets",
+      url: "#",
+      icon: FoldersIcon,
+      isActive: true,
+      items: [
+        {
+          title: "Dashboard",
+          url: "#",
+        },
+        {
+          title: "Assets Management",
+          url: "#",
+        },
+      ],
+    },
+    {
+      title: "Performance",
+      url: "#",
+      icon: PresentationLineChartIcon,
+      isActive: true,
+      items: [
+        {
+          title: "KPI Tracking",
+          url: "#",
+        },
+      ],
     },
   ],
   navMain: [
@@ -73,6 +221,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
+        <NavEmployeeManagement items={data.navEmployeeManagement} />
         <NavMain items={data.navMain} />
         <NavSecondary items={data.navSecondary} />
       </SidebarContent>
