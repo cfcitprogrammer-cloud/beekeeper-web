@@ -5,7 +5,7 @@ import * as React from "react"
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavSecondary } from "@/components/sidebar/nav-secondary"
 import { NavUser } from "@/components/sidebar/nav-user"
-import { TeamSwitcher } from "@/components/sidebar/teams-switcher"
+import { WorkspaceSwitcher } from "@/components/sidebar/workspaces-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -19,12 +19,9 @@ import {
   ClockIcon,
   FoldersIcon,
   Frame,
-  GalleryVerticalEndIcon,
   PresentationLineChartIcon,
-  SquareTerminalIcon,
   UsersIcon,
 } from "@hugeicons/core-free-icons"
-import FrameIcon from "@hugeicons/core-free-icons/FrameIcon"
 import { NavEmployeeManagement } from "./nav-employee-management"
 
 // This is sample data.
@@ -34,7 +31,7 @@ const data = {
     email: "m@example.com",
     avatar: "/avatars/shadcn.jpg",
   },
-  teams: [
+  workspaces: [
     {
       name: "Acme Inc",
       logo: Frame,
@@ -218,7 +215,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <WorkspaceSwitcher workspaces={data.workspaces} />
       </SidebarHeader>
       <SidebarContent>
         <NavEmployeeManagement items={data.navEmployeeManagement} />

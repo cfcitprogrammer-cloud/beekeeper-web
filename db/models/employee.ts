@@ -1,4 +1,4 @@
-import { Gender } from "@/types/enum"
+import { CivilStatus, Gender } from "@/types/enum"
 
 export type EmployeePID = {
   id: number
@@ -17,6 +17,9 @@ export type EmployeePID = {
   city: string
   zip_code: string
   date_of_birth: string
+  civil_status: CivilStatus
+  emergency_contact_name: string
+  emergency_contact_phone: string
 }
 
 export type EmployeeWID = {
