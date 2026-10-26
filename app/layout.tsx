@@ -1,16 +1,20 @@
-import { Geist, Geist_Mono, Nunito_Sans, Noto_Sans } from "next/font/google"
+import { Geist_Mono, Nunito_Sans, Noto_Sans } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Providers } from "@/components/providers/react-query"
 import { cn } from "@/lib/utils"
-import { Toast, Toaster } from "@/components/ui/toast"
+import { Toaster } from "@/components/ui/toast"
 
 const notoSansHeading = Noto_Sans({
   subsets: ["latin"],
   variable: "--font-heading",
 })
 
-const nunitoSans = Nunito_Sans({ subsets: ["latin"], variable: "--font-sans" })
+const nunitoSans = Nunito_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+})
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -35,8 +39,10 @@ export default function RootLayout({
       )}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
-        <Toaster />
+        <Providers>
+          <ThemeProvider>{children}</ThemeProvider>
+          <Toaster />
+        </Providers>
       </body>
     </html>
   )
