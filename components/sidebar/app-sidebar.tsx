@@ -20,9 +20,11 @@ import {
   FoldersIcon,
   Frame,
   PresentationLineChartIcon,
+  Store03Icon,
   UsersIcon,
 } from "@hugeicons/core-free-icons"
 import { NavEmployeeManagement } from "./nav-employee-management"
+import { NavSalesManagement } from "./nav-sales-management"
 
 // This is sample data.
 const data = {
@@ -180,6 +182,36 @@ const data = {
       ],
     },
   ],
+  navSalesManagement: [
+    {
+      title: "Outlets",
+      url: "#",
+      icon: Store03Icon,
+      isActive: true,
+      items: [
+        {
+          title: "Dashboard",
+          url: "#",
+        },
+        {
+          title: "Assigned Outlets",
+          url: "#",
+        },
+        {
+          title: "Outlet Management",
+          url: "#",
+        },
+        {
+          title: "Outlet Assignment",
+          url: "#",
+        },
+        {
+          title: "Configuration",
+          url: "#",
+        },
+      ],
+    },
+  ],
   navMain: [
     {
       title: "Human Resources",
@@ -219,6 +251,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavEmployeeManagement items={data.navEmployeeManagement} />
+        <NavSalesManagement items={data.navSalesManagement} />
         <NavMain items={data.navMain} />
         <NavSecondary items={data.navSecondary} />
       </SidebarContent>

@@ -32,15 +32,15 @@ export default async function Page({
         </CardHeader>
 
         <CardContent>
-          <Alert className="mb-4" variant={"destructive"}>
-            <HugeiconsIcon icon={AlertIcon} />
-            <AlertTitle>Authentication Failed</AlertTitle>
-            <AlertDescription>
-              {error === "invalid-credentials" && (
+          {error === "invalid-credentials" && (
+            <Alert className="mb-4" variant={"destructive"}>
+              <HugeiconsIcon icon={AlertIcon} />
+              <AlertTitle>Authentication Failed</AlertTitle>
+              <AlertDescription>
                 <p role="alert">Invalid email or password. Please try again.</p>
-              )}
-            </AlertDescription>
-          </Alert>
+              </AlertDescription>
+            </Alert>
+          )}
 
           <form action={login}>
             <div className="flex flex-col gap-6">
