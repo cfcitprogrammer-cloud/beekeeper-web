@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation"
 
+import { ShieldCheck } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import {
@@ -40,8 +42,10 @@ export default async function ApprovalTemplateConfigPage({
   return (
     <>
       <PageHeader
+        eyebrow="Governance"
         title={`Configure: ${template.name}`}
         description="Manage stages, approvers, conditions and originators for this template."
+        icon={ShieldCheck}
       />
       <ApprovalTemplateConfigManager
         template={template}

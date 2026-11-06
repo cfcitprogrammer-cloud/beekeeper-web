@@ -1,3 +1,5 @@
+import { MapPin } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getWorkspaceContext, getWorkspaceLocations } from "@/lib/data/queries"
@@ -16,7 +18,12 @@ export default async function WorkspaceLocationsPage() {
 
   return (
     <>
-      <PageHeader title="Attendance locations" description="Manage geofenced attendance locations." />
+      <PageHeader
+        eyebrow="Time & attendance"
+        title="Attendance locations"
+        description="Manage geofenced attendance locations."
+        icon={MapPin}
+      />
       <WorkspaceLocationsManager locations={locations} workspaces={workspaces} />
     </>
   )

@@ -1,3 +1,5 @@
+import { CalendarDays } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getHolidays, getWorkspaceContext } from "@/lib/data/queries"
@@ -16,7 +18,12 @@ export default async function HolidaysPage() {
 
   return (
     <>
-      <PageHeader title="Holidays" description="Manage company and workspace holidays." />
+      <PageHeader
+        eyebrow="Time & attendance"
+        title="Holidays"
+        description="Manage company and workspace holidays."
+        icon={CalendarDays}
+      />
       <HolidaysManager holidays={holidays} workspaces={workspaces} />
     </>
   )

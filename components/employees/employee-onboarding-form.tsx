@@ -143,11 +143,11 @@ function FieldError({ message }: { message?: string }) {
 export function EmployeeOnboardingForm({
   departments,
   positions,
-  managers,
+  employees,
 }: {
   departments: Department[]
   positions: Position[]
-  managers: EmployeeWithRelations[]
+  employees: EmployeeWithRelations[]
 }) {
   const router = useRouter()
   const [step, setStep] = React.useState(0)
@@ -424,7 +424,7 @@ export function EmployeeOnboardingForm({
                       render={({ field }) => (
                         <NativeSelect id="managerId" value={field.value} onChange={field.onChange} className="w-full">
                           <option value="">No direct manager</option>
-                          {managers.map((manager) => (
+                          {employees.map((manager) => (
                             <option key={manager.id} value={manager.id}>
                               {manager.first_name} {manager.last_name} · {manager.position?.title ?? "—"}
                             </option>
@@ -559,8 +559,8 @@ export function EmployeeOnboardingForm({
                     <ReviewItem
                       label="Reporting manager"
                       value={
-                        managers.find((item) => item.id === values.managerId)
-                          ? `${managers.find((item) => item.id === values.managerId)?.first_name} ${managers.find((item) => item.id === values.managerId)?.last_name}`
+                        employees.find((item) => item.id === values.managerId)
+                          ? `${employees.find((item) => item.id === values.managerId)?.first_name} ${employees.find((item) => item.id === values.managerId)?.last_name}`
                           : "No direct manager"
                       }
                     />

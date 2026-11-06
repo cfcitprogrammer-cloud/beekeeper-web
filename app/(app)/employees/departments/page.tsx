@@ -1,3 +1,5 @@
+import { Users } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getDepartments } from "@/lib/data/queries"
@@ -12,7 +14,12 @@ export default async function DepartmentsPage() {
 
   return (
     <>
-      <PageHeader title="Departments" description="Organize the company into departments." />
+      <PageHeader
+        eyebrow="People"
+        title="Departments"
+        description="Organize the company into departments."
+        icon={Users}
+      />
       <DepartmentsManager departments={departments} />
     </>
   )

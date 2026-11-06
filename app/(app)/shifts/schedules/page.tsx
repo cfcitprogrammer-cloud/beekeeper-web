@@ -1,3 +1,5 @@
+import { CalendarClock } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getEmployeeSchedules, getEmployees, getShifts } from "@/lib/data/queries"
@@ -18,7 +20,12 @@ export default async function EmployeeSchedulesPage() {
 
   return (
     <>
-      <PageHeader title="Employee schedules" description="Assign shifts to employees." />
+      <PageHeader
+        eyebrow="Time & attendance"
+        title="Employee schedules"
+        description="Assign shifts to employees."
+        icon={CalendarClock}
+      />
       <EmployeeSchedulesManager schedules={schedules} employees={employees} shifts={shifts} />
     </>
   )

@@ -1,3 +1,5 @@
+import { ShieldCheck } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getApprovalStages } from "@/lib/data/queries"
@@ -12,7 +14,12 @@ export default async function ApprovalStagesPage() {
 
   return (
     <>
-      <PageHeader title="Approval stages" description="Define reusable approval stages." />
+      <PageHeader
+        eyebrow="Governance"
+        title="Approval stages"
+        description="Define reusable approval stages."
+        icon={ShieldCheck}
+      />
       <ApprovalStagesManager stages={stages} />
     </>
   )

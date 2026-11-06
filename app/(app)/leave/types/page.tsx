@@ -1,3 +1,5 @@
+import { CalendarDays } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getLeaveTypes } from "@/lib/data/queries"
@@ -13,8 +15,10 @@ export default async function LeaveTypesPage() {
   return (
     <>
       <PageHeader
+        eyebrow="People"
         title="Leave types"
         description="Configure the leave types available to employees."
+        icon={CalendarDays}
       />
       <LeaveTypesManager leaveTypes={leaveTypes} />
     </>

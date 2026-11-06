@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, Pencil, Plus, Trash2 } from "lucide-react"
+import { CalendarDays, Pencil, Plus, Trash2 } from "lucide-react"
 
 import {
   createLeaveType,
@@ -165,7 +165,7 @@ export function LeaveTypesManager({ leaveTypes }: { leaveTypes: LeaveType[] }) {
         pageSize={10}
         emptyTitle="No leave types found"
         emptyDescription="Create a leave type to get started."
-        emptyIcon={Download}
+        emptyIcon={CalendarDays}
         toolbar={
           <Button size="sm" onClick={openCreate}>
             <Plus />

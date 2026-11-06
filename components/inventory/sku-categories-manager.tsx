@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, Pencil, Plus, Trash2 } from "lucide-react"
+import { Package, Pencil, Plus, Trash2 } from "lucide-react"
 
 import {
   createSkuCategory,
@@ -124,7 +124,7 @@ export function SkuCategoriesManager({
         pageSize={10}
         emptyTitle="No categories found"
         emptyDescription="Create a category to organize SKUs."
-        emptyIcon={Download}
+        emptyIcon={Package}
         toolbar={
           <Button size="sm" onClick={openCreate}>
             <Plus />

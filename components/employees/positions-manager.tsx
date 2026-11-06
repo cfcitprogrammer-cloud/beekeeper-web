@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, Pencil, Plus, Trash2 } from "lucide-react"
+import { BriefcaseBusiness, Pencil, Plus, Trash2 } from "lucide-react"
 
 import {
   createPosition,
@@ -138,7 +138,7 @@ export function PositionsManager({ positions }: { positions: Position[] }) {
         pageSize={10}
         emptyTitle="No positions found"
         emptyDescription="Create a position to get started."
-        emptyIcon={Download}
+        emptyIcon={BriefcaseBusiness}
         toolbar={
           <Button size="sm" onClick={openCreate}>
             <Plus />

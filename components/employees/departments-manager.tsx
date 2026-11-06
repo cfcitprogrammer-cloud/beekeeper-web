@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, GitBranch, Pencil, Plus, Trash2 } from "lucide-react"
+import { GitBranch, Pencil, Plus, Trash2 } from "lucide-react"
 
 import {
   createDepartment,
@@ -130,7 +130,7 @@ export function DepartmentsManager({ departments }: { departments: Department[] 
         pageSize={10}
         emptyTitle="No departments found"
         emptyDescription="Create a department to get started."
-        emptyIcon={Download}
+        emptyIcon={GitBranch}
         toolbar={
           <Button size="sm" onClick={openCreate}>
             <Plus />

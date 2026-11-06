@@ -1,3 +1,5 @@
+import { Package } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getSkuCategories } from "@/lib/data/queries"
@@ -13,8 +15,10 @@ export default async function SkuCategoriesPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Field operations"
         title="SKU categories"
         description="Organize the product catalog into categories."
+        icon={Package}
       />
       <SkuCategoriesManager categories={categories} />
     </>

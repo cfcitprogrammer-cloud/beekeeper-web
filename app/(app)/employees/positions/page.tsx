@@ -1,3 +1,5 @@
+import { BriefcaseBusiness } from "lucide-react"
+
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { getPositions } from "@/lib/data/queries"
@@ -12,7 +14,12 @@ export default async function PositionsPage() {
 
   return (
     <>
-      <PageHeader title="Positions" description="Define job positions for the company." />
+      <PageHeader
+        eyebrow="People"
+        title="Positions"
+        description="Define job positions for the company."
+        icon={BriefcaseBusiness}
+      />
       <PositionsManager positions={positions} />
     </>
   )
