@@ -392,58 +392,16 @@ begin
   raise notice 'Seed complete — Super Admin: % (user id %)', v_email, v_user_id;
 end $$;
 
+
 -- ============================================================================
 -- OPTIONAL: RLS policies
 -- ----------------------------------------------------------------------------
--- The SQL above bypasses RLS. If your public tables have RLS enabled and the
--- app still shows "workspace access pending" after signing in, add policies
--- that let an authenticated user read their own tenancy/RBAC rows. Example
--- (uncomment and adapt to your security model):
+-- If the app still shows "workspace access pending" or RLS errors after
+-- signing in, run the companion file:
 --
--- create policy "company members can read their membership"
---   on public.company_members for select to authenticated
---   using (user_id = auth.uid());
+--   db/seed/rls_policies.sql
 --
--- create policy "company members can read their workspace membership"
---   on public.workspace_members for select to authenticated
---   using (user_id = auth.uid());
---
--- create policy "company members can read their company"
---   on public.companies for select to authenticated
---   using (
---     id in (
---       select company_id from public.company_members
---       where user_id = auth.uid()
---     )
---   );
---
--- create policy "company members can read their workspaces"
---   on public.workspaces for select to authenticated
---   using (
---     company_id in (
---       select company_id from public.company_members
---       where user_id = auth.uid()
---     )
---   );
---
--- create policy "company members can read their roles"
---   on public.roles for select to authenticated
---   using (
---     company_id in (
---       select company_id from public.company_members
---       where user_id = auth.uid()
---     )
---   );
---
--- create policy "company members can read role permissions"
---   on public.role_permissions for select to authenticated
---   using (
---     role_id in (
---       select id from public.roles
---       where company_id in (
---         select company_id from public.company_members
---         where user_id = auth.uid()
---       )
---     )
---   );
+-- It enables RLS on every company-scoped table and grants access to
+-- authenticated members of the user's company (via a security-definer
+-- helper to avoid recursion on company_members).
 -- ============================================================================
