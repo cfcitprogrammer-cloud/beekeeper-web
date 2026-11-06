@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { CalendarClock, Clock3, MoonStar, Plus, Power, Sunrise } from "lucide-react"
+import { CalendarClock, Clock3, MoonStar, Plus, Power, Sunrise, Trash2 } from "lucide-react"
 
-import { createShift } from "@/actions/shift.action"
+import { createShift, deleteShift } from "@/actions/shift.action"
 import { Modal } from "@/components/shared/modal"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -41,6 +41,17 @@ export function ShiftsConfigurator({ shifts }: { shifts: Shift[] }) {
       )
     : 0
   const overnight = shifts.filter((shift) => shift.is_overnight).length
+
+  async function deleteShiftHandler(id: string, name: string) {
+    if (!window.confirm(`Delete shift "${name}"? This cannot be undone.`)) return
+    const result = await deleteShift(id)
+    if (!result.success) {
+      toast.add({ type: "error", title: "Could not delete shift", description: result.error })
+      return
+    }
+    toast.add({ type: "success", title: "Shift deleted", description: `${name} was removed.` })
+    router.refresh()
+  }
 
   async function createShiftHandler() {
     if (!draft.name.trim()) {
@@ -131,6 +142,14 @@ export function ShiftsConfigurator({ shifts }: { shifts: Shift[] }) {
                       {formatTimeRange(shift.start_time, shift.end_time)}
                     </CardDescription>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => deleteShiftHandler(shift.id, shift.name)}
+                    aria-label="Delete shift"
+                  >
+                    <Trash2 className="size-3.5 text-destructive" />
+                  </Button>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-2 py-3">
                   <div className="rounded-md border bg-muted/20 px-1 py-1.5 text-center">

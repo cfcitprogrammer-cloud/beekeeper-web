@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Download, MapPin, Plus, Store } from "lucide-react"
+import { Building2, Download, MapPin, Pencil, Plus, Store, Trash2 } from "lucide-react"
 
-import { createOutlet } from "@/actions/outlet.action"
+import { createOutlet, deleteOutlet, updateOutlet } from "@/actions/outlet.action"
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { Modal } from "@/components/shared/modal"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -34,6 +34,7 @@ export function OutletsDirectory({
   const router = useRouter()
   const [status, setStatus] = React.useState("all")
   const [open, setOpen] = React.useState(false)
+  const [editingId, setEditingId] = React.useState<string | null>(null)
   const [draft, setDraft] = React.useState(emptyDraft)
   const [saving, setSaving] = React.useState(false)
 
@@ -46,7 +47,7 @@ export function OutletsDirectory({
     [outlets, status]
   )
 
-  async function createOutletHandler() {
+  async function saveOutletHandler() {
     if (!draft.name.trim() || !draft.code.trim()) {
       toast.add({
         type: "error",
@@ -57,7 +58,7 @@ export function OutletsDirectory({
     }
 
     setSaving(true)
-    const result = await createOutlet({
+    const payload = {
       name: draft.name,
       code: draft.code,
       address: draft.address,
@@ -65,13 +66,17 @@ export function OutletsDirectory({
       phone: draft.phone,
       email: draft.email,
       geofenceRadiusM: Number(draft.geofence_radius_m) || 150,
-    })
+    }
+
+    const result = editingId
+      ? await updateOutlet({ ...payload, id: editingId })
+      : await createOutlet(payload)
     setSaving(false)
 
     if (!result.success) {
       toast.add({
         type: "error",
-        title: "Could not create outlet",
+        title: editingId ? "Could not update outlet" : "Could not create outlet",
         description: result.error,
       })
       return
@@ -79,12 +84,46 @@ export function OutletsDirectory({
 
     toast.add({
       type: "success",
-      title: "Outlet submitted",
-      description: `${draft.name.trim()} was created and routed for onboarding approval.`,
+      title: editingId ? "Outlet updated" : "Outlet submitted",
+      description: editingId
+        ? `${draft.name.trim()} was updated.`
+        : `${draft.name.trim()} was created and routed for onboarding approval.`,
     })
     setDraft(emptyDraft)
+    setEditingId(null)
     setOpen(false)
     router.refresh()
+  }
+
+  async function deleteOutletHandler(id: string, name: string) {
+    if (!window.confirm(`Delete outlet "${name}"? This cannot be undone.`)) return
+    const result = await deleteOutlet(id)
+    if (!result.success) {
+      toast.add({ type: "error", title: "Could not delete outlet", description: result.error })
+      return
+    }
+    toast.add({ type: "success", title: "Outlet deleted", description: `${name} was removed.` })
+    router.refresh()
+  }
+
+  function openCreate() {
+    setEditingId(null)
+    setDraft(emptyDraft)
+    setOpen(true)
+  }
+
+  function openEdit(outlet: OutletWithRelations) {
+    setEditingId(outlet.id)
+    setDraft({
+      name: outlet.name,
+      code: outlet.code,
+      address: outlet.address ?? "",
+      contact_person: outlet.contact_person ?? "",
+      phone: outlet.phone ?? "",
+      email: outlet.email ?? "",
+      geofence_radius_m: String(outlet.geofence_radius_m ?? 150),
+    })
+    setOpen(true)
   }
 
   const columns: DataTableColumn<OutletWithRelations>[] = [
@@ -156,6 +195,26 @@ export function OutletsDirectory({
       sortValue: (row) => row.status,
       cell: (row) => <StatusBadge status={row.status} />,
     },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (row) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon-sm" onClick={() => openEdit(row)} aria-label="Edit outlet">
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => deleteOutletHandler(row.id, row.name)}
+            aria-label="Delete outlet"
+          >
+            <Trash2 className="size-3.5 text-destructive" />
+          </Button>
+        </div>
+      ),
+    },
   ]
 
   return (
@@ -195,7 +254,7 @@ export function OutletsDirectory({
               <Download />
               Export
             </Button>
-            <Button size="sm" onClick={() => setOpen(true)}>
+            <Button size="sm" onClick={openCreate}>
               <Plus />
               Add outlet
             </Button>
@@ -205,18 +264,32 @@ export function OutletsDirectory({
 
       <Modal
         open={open}
-        onOpenChange={setOpen}
-        title="Add an outlet"
-        description="New outlets are routed through the onboarding approval template."
+        onOpenChange={(value) => {
+          setOpen(value)
+          if (!value) {
+            setEditingId(null)
+            setDraft(emptyDraft)
+          }
+        }}
+        title={editingId ? "Edit outlet" : "Add an outlet"}
+        description={
+          editingId
+            ? "Update outlet details."
+            : "New outlets are routed through the onboarding approval template."
+        }
         size="lg"
         footer={
           <>
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={createOutletHandler} disabled={saving}>
+            <Button onClick={saveOutletHandler} disabled={saving}>
               <Plus />
-              {saving ? "Submitting…" : "Submit for approval"}
+              {saving
+                ? "Saving…"
+                : editingId
+                  ? "Save changes"
+                  : "Submit for approval"}
             </Button>
           </>
         }

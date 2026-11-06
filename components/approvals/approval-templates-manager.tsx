@@ -10,10 +10,12 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
 } from "lucide-react"
 
 import {
   createApprovalTemplate,
+  deleteApprovalTemplate,
   duplicateApprovalTemplate,
   toggleApprovalTemplate,
 } from "@/actions/approval.action"
@@ -104,6 +106,17 @@ export function ApprovalTemplatesManager({
       title: "Template duplicated",
       description: `${template.name} (copy) was created as an inactive draft.`,
     })
+    router.refresh()
+  }
+
+  async function deleteTemplate(id: string, name: string) {
+    if (!window.confirm(`Delete template "${name}"? This cannot be undone.`)) return
+    const result = await deleteApprovalTemplate(id)
+    if (!result.success) {
+      toast.add({ type: "error", title: "Could not delete template", description: result.error })
+      return
+    }
+    toast.add({ type: "success", title: "Template deleted", description: `${name} was removed.` })
     router.refresh()
   }
 
@@ -205,6 +218,14 @@ export function ApprovalTemplatesManager({
                     </CardDescription>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => deleteTemplate(template.id, template.name)}
+                      aria-label="Delete template"
+                    >
+                      <Trash2 className="size-3.5 text-destructive" />
+                    </Button>
                     <StatusBadge
                       status={template.is_active ? "ACTIVE" : "INACTIVE"}
                       label={template.is_active ? "Active" : "Inactive"}

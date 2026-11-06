@@ -61,6 +61,86 @@ function dbGender(value?: string) {
   return value.toLowerCase()
 }
 
+export type UpdateEmployeeInput = CreateEmployeeInput & { id: string }
+
+export async function updateEmployee(
+  input: UpdateEmployeeInput
+): Promise<ActionResult<{ id: string }>> {
+  if (!input.id) return failure("Employee id is required.")
+  if (!input.firstName.trim() || !input.lastName.trim()) {
+    return failure("First name and last name are required.")
+  }
+
+  const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_UPDATE)
+  if ("error" in authorized) return authorized.error
+
+  const { supabase, companyId, workspaceId } = authorized.context
+
+  const { data, error } = await supabase
+    .from("employees")
+    .update({
+      first_name: input.firstName.trim(),
+      middle_name: input.middleName?.trim() || null,
+      last_name: input.lastName.trim(),
+      suffix: input.suffix?.trim() || null,
+      email: input.email?.trim() || null,
+      phone: input.phone?.trim() || null,
+      birth_date: input.birthDate || null,
+      gender: dbGender(input.gender),
+      civil_status: input.civilStatus || null,
+      address: input.address?.trim() || null,
+      emergency_contact_name: input.emergencyContactName?.trim() || null,
+      emergency_contact_phone: input.emergencyContactPhone?.trim() || null,
+      department_id: input.departmentId || null,
+      position_id: input.positionId || null,
+      manager_id: input.managerId || null,
+      employment_type: dbEmploymentType(input.employmentType),
+      status: dbEmploymentStatus(input.status),
+      hire_date: input.hireDate || null,
+      base_salary: input.baseSalary ?? null,
+      pay_frequency: dbPayFrequency(input.payFrequency),
+      ...(workspaceId ? { workspace_id: workspaceId } : {}),
+    })
+    .eq("id", input.id)
+    .eq("company_id", companyId)
+    .select("id")
+    .single()
+
+  if (error) {
+    console.error("[action:updateEmployee]", error)
+    return failure(error.message)
+  }
+
+  revalidatePath("/employees")
+  revalidatePath(`/employees/${input.id}`)
+  revalidatePath("/dashboard")
+  return { success: true, data }
+}
+
+export async function deleteEmployee(id: string): Promise<ActionResult<{ id: string }>> {
+  if (!id) return failure("Employee id is required.")
+
+  const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_DELETE)
+  if ("error" in authorized) return authorized.error
+
+  const { supabase, companyId } = authorized.context
+
+  const { error } = await supabase
+    .from("employees")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", companyId)
+
+  if (error) {
+    console.error("[action:deleteEmployee]", error)
+    return failure(error.message)
+  }
+
+  revalidatePath("/employees")
+  revalidatePath("/dashboard")
+  return { success: true, data: { id } }
+}
+
 export async function createEmployee(
   input: CreateEmployeeInput
 ): Promise<ActionResult<{ id: string; employee_no: string }>> {

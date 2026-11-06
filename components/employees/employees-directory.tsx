@@ -3,12 +3,15 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Download, Mail, Plus, Users } from "lucide-react"
+import { Download, Mail, Plus, Trash2, Users } from "lucide-react"
+
+import { deleteEmployee } from "@/actions/employee.action"
 
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/toast"
 import { NativeSelect } from "@/components/ui/native-select"
 import {
   EMPLOYMENT_STATUSES,
@@ -46,6 +49,17 @@ export function EmployeesDirectory({
       }),
     [employees, departmentId, status, employmentType]
   )
+
+  async function deleteEmployeeHandler(id: string, name: string) {
+    if (!window.confirm(`Delete employee "${name}"? This cannot be undone.`)) return
+    const result = await deleteEmployee(id)
+    if (!result.success) {
+      toast.add({ type: "error", title: "Could not delete employee", description: result.error })
+      return
+    }
+    toast.add({ type: "success", title: "Employee deleted", description: `${name} was removed.` })
+    router.refresh()
+  }
 
   const columns: DataTableColumn<EmployeeWithRelations>[] = [
     {
@@ -149,6 +163,14 @@ export function EmployeesDirectory({
             render={<Link href={`/employees/${row.id}`} />}
           >
             View
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => deleteEmployeeHandler(row.id, `${row.first_name} ${row.last_name}`)}
+            aria-label="Delete employee"
+          >
+            <Trash2 className="size-3.5 text-destructive" />
           </Button>
         </div>
       ),

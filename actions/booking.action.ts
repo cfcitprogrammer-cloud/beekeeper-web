@@ -32,6 +32,30 @@ function dbBookingStatus(value: string) {
   }
 }
 
+export async function deleteBooking(id: string): Promise<ActionResult<{ id: string }>> {
+  if (!id) return failure("Booking id is required.")
+
+  const authorized = await getAuthorizedContext(PERMISSIONS.BOOKINGS_DELETE)
+  if ("error" in authorized) return authorized.error
+
+  const { supabase, companyId } = authorized.context
+
+  const { error } = await supabase
+    .from("bookings")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", companyId)
+
+  if (error) {
+    console.error("[action:deleteBooking]", error)
+    return failure(error.message)
+  }
+
+  revalidatePath("/bookings")
+  revalidatePath("/dashboard")
+  return { success: true, data: { id } }
+}
+
 export async function createBooking(
   input: CreateBookingInput
 ): Promise<ActionResult<{ id: string; booking_no: string }>> {

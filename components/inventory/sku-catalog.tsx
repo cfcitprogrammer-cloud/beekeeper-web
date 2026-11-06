@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, Package, PackagePlus, Plus } from "lucide-react"
+import { Download, Package, PackagePlus, Pencil, Plus, Trash2 } from "lucide-react"
 
-import { createSku } from "@/actions/sku.action"
+import { createSku, deleteSku, updateSku } from "@/actions/sku.action"
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { Modal } from "@/components/shared/modal"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -40,6 +40,7 @@ export function SkuCatalog({
   const [status, setStatus] = React.useState("all")
   const [open, setOpen] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
+  const [editingId, setEditingId] = React.useState<string | null>(null)
   const [draft, setDraft] = React.useState({
     ...emptyDraft,
     category_id: categories[0]?.id ?? "",
@@ -56,7 +57,7 @@ export function SkuCatalog({
     [skus, categoryId, status]
   )
 
-  async function createSkuHandler() {
+  async function saveSkuHandler() {
     if (!draft.name.trim() || !draft.sku_code.trim()) {
       toast.add({
         type: "error",
@@ -67,7 +68,7 @@ export function SkuCatalog({
     }
 
     setSaving(true)
-    const result = await createSku({
+    const payload = {
       name: draft.name,
       skuCode: draft.sku_code,
       categoryId: draft.category_id || undefined,
@@ -77,13 +78,17 @@ export function SkuCatalog({
       unitPrice: Number(draft.unit_price) || 0,
       taxRate: Number(draft.tax_rate) || 0,
       isActive: draft.is_active === "true",
-    })
+    }
+
+    const result = editingId
+      ? await updateSku({ ...payload, id: editingId })
+      : await createSku(payload)
     setSaving(false)
 
     if (!result.success) {
       toast.add({
         type: "error",
-        title: "Could not create SKU",
+        title: editingId ? "Could not update SKU" : "Could not create SKU",
         description: result.error,
       })
       return
@@ -91,12 +96,48 @@ export function SkuCatalog({
 
     toast.add({
       type: "success",
-      title: "SKU created",
-      description: `${draft.name.trim()} is now available in the catalog.`,
+      title: editingId ? "SKU updated" : "SKU created",
+      description: editingId
+        ? `${draft.name.trim()} was updated.`
+        : `${draft.name.trim()} is now available in the catalog.`,
     })
     setDraft({ ...emptyDraft, category_id: categories[0]?.id ?? "" })
+    setEditingId(null)
     setOpen(false)
     router.refresh()
+  }
+
+  async function deleteSkuHandler(id: string, name: string) {
+    if (!window.confirm(`Delete SKU "${name}"? This cannot be undone.`)) return
+    const result = await deleteSku(id)
+    if (!result.success) {
+      toast.add({ type: "error", title: "Could not delete SKU", description: result.error })
+      return
+    }
+    toast.add({ type: "success", title: "SKU deleted", description: `${name} was removed.` })
+    router.refresh()
+  }
+
+  function openCreate() {
+    setEditingId(null)
+    setDraft({ ...emptyDraft, category_id: categories[0]?.id ?? "" })
+    setOpen(true)
+  }
+
+  function openEdit(sku: SkuWithCategory) {
+    setEditingId(sku.id)
+    setDraft({
+      name: sku.name,
+      sku_code: sku.sku_code,
+      category_id: sku.category_id ?? "",
+      brand: sku.brand ?? "",
+      barcode: sku.barcode ?? "",
+      uom: sku.uom,
+      unit_price: String(sku.unit_price),
+      tax_rate: String(sku.tax_rate),
+      is_active: sku.is_active ? "true" : "false",
+    })
+    setOpen(true)
   }
 
   const columns: DataTableColumn<SkuWithCategory>[] = [
@@ -174,6 +215,26 @@ export function SkuCatalog({
         />
       ),
     },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (row) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon-sm" onClick={() => openEdit(row)} aria-label="Edit SKU">
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => deleteSkuHandler(row.id, row.name)}
+            aria-label="Delete SKU"
+          >
+            <Trash2 className="size-3.5 text-destructive" />
+          </Button>
+        </div>
+      ),
+    },
   ]
 
   return (
@@ -224,7 +285,7 @@ export function SkuCatalog({
               <Download />
               Export
             </Button>
-            <Button size="sm" onClick={() => setOpen(true)}>
+            <Button size="sm" onClick={openCreate}>
               <PackagePlus />
               Add SKU
             </Button>
@@ -234,18 +295,28 @@ export function SkuCatalog({
 
       <Modal
         open={open}
-        onOpenChange={setOpen}
-        title="Add a SKU"
-        description="Create a sellable item for bookings and inventory tracking."
+        onOpenChange={(value) => {
+          setOpen(value)
+          if (!value) {
+            setEditingId(null)
+            setDraft({ ...emptyDraft, category_id: categories[0]?.id ?? "" })
+          }
+        }}
+        title={editingId ? "Edit SKU" : "Add a SKU"}
+        description={
+          editingId
+            ? "Update the SKU details."
+            : "Create a sellable item for bookings and inventory tracking."
+        }
         size="lg"
         footer={
           <>
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={createSkuHandler} disabled={saving}>
+            <Button onClick={saveSkuHandler} disabled={saving}>
               <Plus />
-              {saving ? "Creating…" : "Create SKU"}
+              {saving ? "Saving…" : editingId ? "Save changes" : "Create SKU"}
             </Button>
           </>
         }

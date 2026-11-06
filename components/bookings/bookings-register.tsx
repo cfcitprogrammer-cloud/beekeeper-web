@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, Plus, ShoppingCart } from "lucide-react"
+import { Download, Plus, ShoppingCart, Trash2 } from "lucide-react"
 
-import { createBooking } from "@/actions/booking.action"
+import { createBooking, deleteBooking } from "@/actions/booking.action"
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { Modal } from "@/components/shared/modal"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -171,19 +171,43 @@ export function BookingsRegister({
       header: "",
       align: "right",
       cell: (row) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(event) => {
-            event.stopPropagation()
-            router.push(`/bookings/${row.id}`)
-          }}
-        >
-          View
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation()
+              router.push(`/bookings/${row.id}`)
+            }}
+          >
+            View
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={(event) => {
+              event.stopPropagation()
+              deleteBookingHandler(row.id, row.booking_no)
+            }}
+            aria-label="Delete booking"
+          >
+            <Trash2 className="size-3.5 text-destructive" />
+          </Button>
+        </div>
       ),
     },
   ]
+
+  async function deleteBookingHandler(id: string, bookingNo: string) {
+    if (!window.confirm(`Delete booking ${bookingNo}? This cannot be undone.`)) return
+    const result = await deleteBooking(id)
+    if (!result.success) {
+      toast.add({ type: "error", title: "Could not delete booking", description: result.error })
+      return
+    }
+    toast.add({ type: "success", title: "Booking deleted", description: `${bookingNo} was removed.` })
+    router.refresh()
+  }
 
   return (
     <>

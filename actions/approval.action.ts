@@ -195,6 +195,70 @@ export async function decideApproval(
   return { success: true, data: { requestId: input.requestId } }
 }
 
+export type UpdateApprovalTemplateInput = {
+  id: string
+  name: string
+  description?: string
+  documentType: "BOOKING" | "OUTLET"
+}
+
+export async function updateApprovalTemplate(
+  input: UpdateApprovalTemplateInput
+): Promise<ActionResult<{ id: string }>> {
+  if (!input.id) return failure("Template id is required.")
+  if (!input.name.trim()) return failure("Template name is required.")
+
+  const authorized = await getAuthorizedContext(PERMISSIONS.APPROVALS_MANAGE)
+  if ("error" in authorized) return authorized.error
+
+  const { supabase, companyId } = authorized.context
+
+  const { data, error } = await supabase
+    .from("approval_templates")
+    .update({
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      document_type: input.documentType.toLowerCase(),
+    })
+    .eq("id", input.id)
+    .eq("company_id", companyId)
+    .select("id")
+    .single()
+
+  if (error) {
+    console.error("[action:updateApprovalTemplate]", error)
+    return failure(error.message)
+  }
+
+  revalidatePath("/approvals/templates")
+  return { success: true, data }
+}
+
+export async function deleteApprovalTemplate(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  if (!id) return failure("Template id is required.")
+
+  const authorized = await getAuthorizedContext(PERMISSIONS.APPROVALS_MANAGE)
+  if ("error" in authorized) return authorized.error
+
+  const { supabase, companyId } = authorized.context
+
+  const { error } = await supabase
+    .from("approval_templates")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", companyId)
+
+  if (error) {
+    console.error("[action:deleteApprovalTemplate]", error)
+    return failure(error.message)
+  }
+
+  revalidatePath("/approvals/templates")
+  return { success: true, data: { id } }
+}
+
 export async function toggleApprovalTemplate(input: {
   id: string
   isActive: boolean
