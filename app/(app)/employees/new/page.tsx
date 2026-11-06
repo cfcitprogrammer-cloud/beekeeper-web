@@ -9,7 +9,7 @@ export default async function NewEmployeePage() {
   const [departmentsResult, positionsResult, employeesResult] =
     await Promise.all([getDepartments(), getPositions(), getEmployees()])
 
-  const managers = employeesResult.data.filter((employee) =>
+  const employees = employeesResult.data.filter((employee) =>
     ["ACTIVE", "PROBATION"].includes(employee.status)
   )
 
@@ -17,7 +17,7 @@ export default async function NewEmployeePage() {
     <EmployeeOnboardingForm
       departments={departmentsResult.data}
       positions={positionsResult.data}
-      managers={managers}
+      employees={employees}
     />
   )
 }

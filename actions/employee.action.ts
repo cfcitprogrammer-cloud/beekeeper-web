@@ -8,6 +8,7 @@ import {
   type ActionResult,
 } from "@/actions/helpers/context"
 import { PERMISSIONS } from "@/lib/auth/permissions"
+import { createAdminClient } from "@/utils/supabase/admin"
 
 export type CreateEmployeeInput = {
   firstName: string
@@ -15,6 +16,8 @@ export type CreateEmployeeInput = {
   lastName: string
   suffix?: string
   email?: string
+  password?: string
+  createAccount?: boolean
   phone?: string
   birthDate?: string
   gender?: string
@@ -159,6 +162,44 @@ export async function createEmployee(
     )
   }
 
+  // Optionally create a Supabase auth account for the employee.
+  let userId: string | null = null
+  if (input.createAccount && input.email?.trim() && input.password) {
+    const adminClient = createAdminClient()
+    if (adminClient) {
+      const { data: created, error: createError } =
+        await adminClient.auth.admin.createUser({
+          email: input.email.trim(),
+          password: input.password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: `${input.firstName.trim()} ${input.lastName.trim()}`.trim(),
+          },
+        })
+      if (createError || !created.user) {
+        console.error("[action:createEmployee:admin]", createError)
+        return failure(createError?.message ?? "Could not create login account.")
+      }
+      userId = created.user.id
+    } else {
+      // Fallback to anon signUp (requires email confirmation).
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: input.email.trim(),
+        password: input.password,
+        options: {
+          data: {
+            full_name: `${input.firstName.trim()} ${input.lastName.trim()}`.trim(),
+          },
+        },
+      })
+      if (signUpError || !signUpData.user) {
+        console.error("[action:createEmployee:signUp]", signUpError)
+        return failure(signUpError?.message ?? "Could not create login account.")
+      }
+      userId = signUpData.user.id
+    }
+  }
+
   const { count } = await supabase
     .from("employees")
     .select("id", { count: "exact", head: true })
@@ -171,6 +212,7 @@ export async function createEmployee(
     .insert({
       company_id: companyId,
       workspace_id: workspaceId,
+      user_id: userId,
       employee_no: employeeNo,
       first_name: input.firstName.trim(),
       middle_name: input.middleName?.trim() || null,

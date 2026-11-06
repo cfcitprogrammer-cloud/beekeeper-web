@@ -307,14 +307,23 @@ export function ApprovalTemplatesManager({
                   <span className="text-[0.625rem] text-muted-foreground">
                     Updated {formatDate(template.updated_at)}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => duplicateTemplate(template)}
-                  >
-                    <Copy />
-                    Duplicate
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      render={<a href={`/approvals/templates/${template.id}`} />}
+                    >
+                      Configure
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => duplicateTemplate(template)}
+                    >
+                      <Copy />
+                      Duplicate
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

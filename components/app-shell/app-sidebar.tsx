@@ -98,6 +98,16 @@ export const navSections: NavSection[] = [
             href: "/employees/new",
             permission: PERMISSIONS.EMPLOYEES_CREATE,
           },
+          {
+            title: "Departments",
+            href: "/employees/departments",
+            permission: PERMISSIONS.EMPLOYEES_VIEW,
+          },
+          {
+            title: "Positions",
+            href: "/employees/positions",
+            permission: PERMISSIONS.EMPLOYEES_VIEW,
+          },
         ],
       },
       {
@@ -114,6 +124,11 @@ export const navSections: NavSection[] = [
           {
             title: "Balances",
             href: "/leave/balances",
+            permission: PERMISSIONS.LEAVE_VIEW,
+          },
+          {
+            title: "Types",
+            href: "/leave/types",
             permission: PERMISSIONS.LEAVE_VIEW,
           },
         ],
@@ -139,6 +154,16 @@ export const navSections: NavSection[] = [
             href: "/attendance/daily-summary",
             permission: PERMISSIONS.ATTENDANCE_VIEW,
           },
+          {
+            title: "Holidays",
+            href: "/attendance/holidays",
+            permission: PERMISSIONS.ATTENDANCE_VIEW,
+          },
+          {
+            title: "Locations",
+            href: "/attendance/locations",
+            permission: PERMISSIONS.ATTENDANCE_VIEW,
+          },
         ],
       },
       {
@@ -146,6 +171,18 @@ export const navSections: NavSection[] = [
         href: "/shifts",
         icon: Clock3,
         permission: PERMISSIONS.SHIFTS_VIEW,
+        children: [
+          {
+            title: "Templates",
+            href: "/shifts",
+            permission: PERMISSIONS.SHIFTS_VIEW,
+          },
+          {
+            title: "Schedules",
+            href: "/shifts/schedules",
+            permission: PERMISSIONS.SHIFTS_VIEW,
+          },
+        ],
       },
     ],
   },
@@ -167,6 +204,11 @@ export const navSections: NavSection[] = [
           {
             title: "SKU catalog",
             href: "/inventory/skus",
+            permission: PERMISSIONS.INVENTORY_VIEW,
+          },
+          {
+            title: "Categories",
+            href: "/inventory/categories",
             permission: PERMISSIONS.INVENTORY_VIEW,
           },
         ],
@@ -193,6 +235,11 @@ export const navSections: NavSection[] = [
             href: "/approvals/inbox",
             badge: undefined,
             permission: PERMISSIONS.APPROVALS_VIEW,
+          },
+          {
+            title: "Stages",
+            href: "/approvals/stages",
+            permission: PERMISSIONS.APPROVALS_MANAGE,
           },
           {
             title: "Templates",

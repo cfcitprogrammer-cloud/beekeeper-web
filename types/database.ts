@@ -719,6 +719,7 @@ export type BookingDetail = Booking & {
 export type ApprovalTemplateWithConfig = ApprovalTemplate & {
   stages: ApprovalTemplateStage[]
   conditions: ApprovalTemplateCondition[]
+  originators: { user_id: string }[]
 }
 
 export type SkuWithCategory = Sku & {

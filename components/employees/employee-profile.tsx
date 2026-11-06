@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -14,10 +15,11 @@ import {
   MessageSquare,
   Pencil,
   Phone,
+  Trash2,
   UserRound,
 } from "lucide-react"
 
-import { StatusBadge } from "@/components/shared/status-badge"
+import { deleteEmployeeDocument, getEmployeeDocumentUrl, uploadEmployeeDocument } from "@/actions/employee-document.action"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,7 +40,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { StatusBadge } from "@/components/shared/status-badge"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "@/components/ui/toast"
 import {
   formatCurrency,
   formatDate,
@@ -77,6 +82,8 @@ export function EmployeeProfile({
   leaveRequests: LeaveRequestWithRelations[]
   leaveBalances: LeaveBalanceWithRelations[]
 }) {
+  const router = useRouter()
+  const [uploading, setUploading] = React.useState(false)
   const fullName = `${employee.first_name} ${employee.middle_name ? `${employee.middle_name} ` : ""}${employee.last_name}`
   const employeeAttendance = attendance
     .filter((row) => row.employee_id === employee.id)
@@ -465,13 +472,38 @@ export function EmployeeProfile({
                     Contracts, government IDs and compliance records.
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm">
-                  <Download />
-                  Download all
-                </Button>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
+              <form
+                onSubmit={async (event) => {
+                  event.preventDefault()
+                  const form = event.currentTarget
+                  const formData = new FormData(form)
+                  formData.set("employeeId", employee.id)
+                  setUploading(true)
+                  const result = await uploadEmployeeDocument(formData)
+                  setUploading(false)
+                  if (!result.success) {
+                    toast.add({ type: "error", title: "Upload failed", description: result.error })
+                    return
+                  }
+                  toast.add({ type: "success", title: "Document uploaded" })
+                  form.reset()
+                  router.refresh()
+                }}
+                className="mb-4 grid gap-2 sm:grid-cols-4"
+              >
+                <Input name="name" placeholder="Document name" required className="sm:col-span-1" />
+                <Input name="category" placeholder="Category" className="sm:col-span-1" />
+                <Input name="expiresOn" type="date" className="sm:col-span-1" />
+                <div className="flex items-center gap-2 sm:col-span-1">
+                  <Input name="file" type="file" required className="h-8" />
+                  <Button type="submit" size="sm" disabled={uploading}>
+                    {uploading ? "Uploading…" : "Upload"}
+                  </Button>
+                </div>
+              </form>
               {documents.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-10 text-center">
                   <FileText className="size-6 text-muted-foreground" />
@@ -501,8 +533,37 @@ export function EmployeeProfile({
                           Expires {formatDate(document.expires_on)}
                         </Badge>
                       )}
-                      <Button variant="ghost" size="icon-sm" aria-label="Download document">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Download document"
+                        onClick={async () => {
+                          const result = await getEmployeeDocumentUrl(document.file_path)
+                          if (!result.success) {
+                            toast.add({ type: "error", title: "Download failed", description: result.error })
+                            return
+                          }
+                          window.open(result.data.url, "_blank")
+                        }}
+                      >
                         <Download />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Delete document"
+                        onClick={async () => {
+                          if (!window.confirm(`Delete "${document.name}"?`)) return
+                          const result = await deleteEmployeeDocument(document.id, employee.id, document.file_path)
+                          if (!result.success) {
+                            toast.add({ type: "error", title: "Delete failed", description: result.error })
+                            return
+                          }
+                          toast.add({ type: "success", title: "Document deleted" })
+                          router.refresh()
+                        }}
+                      >
+                        <Trash2 className="size-3.5 text-destructive" />
                       </Button>
                     </div>
                   ))}

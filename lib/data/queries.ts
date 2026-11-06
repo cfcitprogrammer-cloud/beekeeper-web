@@ -4,6 +4,7 @@ import { getAccessContext } from "@/lib/auth/access"
 import { createClient } from "@/utils/supabase/server"
 import type {
   ApprovalHistoryItem,
+  ApprovalStage,
   ApprovalTemplateWithConfig,
   AttendanceDaily,
   AttendanceWithEmployee,
@@ -13,9 +14,11 @@ import type {
   Department,
   Employee,
   EmployeeDocument,
+  EmployeeSchedule,
   EmployeeWithRelations,
   LeaveBalanceWithRelations,
   LeaveRequestWithRelations,
+  Holiday,
   LeaveType,
   MyPendingApproval,
   OutletWithRelations,
@@ -381,6 +384,18 @@ export async function getDepartments(): Promise<QueryResult<Department[]>> {
   return empty((data as Department[] | null) ?? [])
 }
 
+export async function getRoles(): Promise<QueryResult<{ id: string; name: string }[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("roles")
+    .select("id, name")
+    .order("name")
+
+  logError("roles", error)
+  return empty(((data as { id: string; name: string }[] | null) ?? []))
+}
+
+
 export async function getPositions(): Promise<QueryResult<Position[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -405,6 +420,17 @@ export async function getShifts(): Promise<QueryResult<Shift[]>> {
 
   logError("shifts", error)
   return empty((data as Shift[] | null) ?? [])
+}
+
+export async function getEmployeeSchedules(): Promise<QueryResult<EmployeeSchedule[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("employee_schedules")
+    .select("*")
+    .order("effective_from", { ascending: false })
+
+  logError("employee-schedules", error)
+  return empty((data as EmployeeSchedule[] | null) ?? [])
 }
 
 type AttendanceEventRow = {
@@ -607,6 +633,27 @@ export async function getLeaveTypes(): Promise<QueryResult<LeaveType[]>> {
   return empty(((data as LeaveTypeRow[] | null) ?? []).map(mapLeaveType))
 }
 
+export async function getHolidays(): Promise<QueryResult<Holiday[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("holidays")
+    .select("*")
+    .order("holiday_date")
+
+  logError("holidays", error)
+  const rows = (data as { id: string; company_id: string; workspace_id: string | null; holiday_date: string; name: string; type: string; created_at: string }[] | null) ?? []
+  const mapped: Holiday[] = rows.map((r) => ({
+    id: r.id,
+    company_id: r.company_id,
+    workspace_id: r.workspace_id,
+    holiday_date: r.holiday_date,
+    name: r.name,
+    type: r.type === "regular" ? "REGULAR" : r.type === "special" ? "SPECIAL" : "LOCAL",
+    created_at: r.created_at,
+  }))
+  return empty(mapped)
+}
+
 type LeaveRequestRow = {
   id: string
   company_id: string
@@ -754,6 +801,17 @@ export async function getLeaveBalances(): Promise<
 
 /* -------------------------------------------------------------------------- */
 /*                          Outlets & Inventory                               */
+export async function getWorkspaceLocations(): Promise<QueryResult<WorkspaceLocation[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("workspace_locations")
+    .select("*")
+    .order("name")
+
+  logError("workspace-locations", error)
+  return empty((data as WorkspaceLocation[] | null) ?? [])
+}
+
 /* -------------------------------------------------------------------------- */
 
 export async function getOutlets(): Promise<
@@ -1032,7 +1090,7 @@ export async function getApprovalTemplates(): Promise<
   QueryResult<ApprovalTemplateWithConfig[]>
 > {
   const supabase = await createClient()
-  const [templatesResult, stagesResult, conditionsResult, approversResult] =
+  const [templatesResult, stagesResult, conditionsResult, approversResult, originatorsResult] =
     await Promise.all([
       supabase.from("approval_templates").select("*").order("name"),
       supabase
@@ -1041,18 +1099,21 @@ export async function getApprovalTemplates(): Promise<
         .order("seq"),
       supabase.from("approval_template_conditions").select("*"),
       supabase.from("approval_stage_approvers").select("*"),
+      supabase.from("approval_template_originators").select("*"),
     ])
 
   logError("approval-templates", templatesResult.error)
   logError("approval-template-stages", stagesResult.error)
   logError("approval-template-conditions", conditionsResult.error)
   logError("approval-stage-approvers", approversResult.error)
+  logError("approval-template-originators", originatorsResult.error)
 
   if (templatesResult.error || !templatesResult.data) return empty([])
 
   const stages = (stagesResult.data ?? []) as TemplateStageRow[]
   const conditions = (conditionsResult.data ?? []) as TemplateConditionRow[]
   const approvers = (approversResult.data ?? []) as StageApproverRow[]
+  const originators = (originatorsResult.data ?? []) as { template_id: string; user_id: string }[]
 
   const data = (templatesResult.data as TemplateRow[]).map((template) => ({
     id: template.id,
@@ -1092,7 +1153,21 @@ export async function getApprovalTemplates(): Promise<
             ? String(condition.value_numeric)
             : (condition.value_text ?? ""),
       })),
+    originators: originators
+      .filter((o) => o.template_id === template.id)
+      .map((o) => ({ user_id: o.user_id })),
   }))
 
   return empty(data)
+}
+
+export async function getApprovalStages(): Promise<QueryResult<ApprovalStage[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("approval_stages")
+    .select("*")
+    .order("name")
+
+  logError("approval-stages", error)
+  return empty((data as ApprovalStage[] | null) ?? [])
 }
