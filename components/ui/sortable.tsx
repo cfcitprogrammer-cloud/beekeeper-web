@@ -326,7 +326,7 @@ function SortableContent(props: SortableContentProps) {
 
   const context = useSortableContext(CONTENT_NAME)
 
-  const ContentPrimitive = asChild ? SlotPrimitive.Slot : "div"
+  const ContentPrimitive = asChild ? SlotPrimitive : "div"
 
   return (
     <SortableContentContext.Provider value={true}>
@@ -440,7 +440,7 @@ function SortableItem(props: SortableItemProps) {
     [id, attributes, listeners, setActivatorNodeRef, isDragging, disabled]
   )
 
-  const ItemPrimitive = asChild ? SlotPrimitive.Slot : "div"
+  const ItemPrimitive = asChild ? SlotPrimitive : "div"
 
   return (
     <SortableItemContext.Provider value={itemContext}>
@@ -488,7 +488,7 @@ function SortableItemHandle(props: SortableItemHandleProps) {
     itemContext.setActivatorNodeRef(node)
   })
 
-  const HandlePrimitive = asChild ? SlotPrimitive.Slot : "button"
+  const HandlePrimitive = asChild ? SlotPrimitive : "button"
 
   return (
     <HandlePrimitive

@@ -284,12 +284,12 @@ export function DataTable<TData extends RowData>({
               ) : filterVariant === "date" ? (
                 <DateFilter
                   column={column}
-                  title={column.columnDef.meta?.filterName as string}
+                  title={meta?.filterName ?? column.id}
                 />
               ) : filterVariant === "checkbox" ? (
                 <CheckboxFilter
                   column={column}
-                  title={column.columnDef.meta?.filterName as string}
+                  title={meta?.filterName ?? column.id}
                   options={filterOptions}
                 />
               ) : null}

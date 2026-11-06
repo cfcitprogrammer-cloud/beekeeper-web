@@ -1,32 +1,74 @@
 "use server"
 
-import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
-export async function login(formData: FormData) {
-  const email = formData.get("email")
-  const password = formData.get("password")
+import { getAccessContext } from "@/lib/auth/access"
+import { defaultRouteFor } from "@/lib/auth/permissions"
+import { createClient } from "@/utils/supabase/server"
 
-  if (
-    typeof email !== "string" ||
-    typeof password !== "string" ||
-    !email.trim() ||
-    !password
-  ) {
-    redirect("/login?error=invalid-credentials")
+export type LoginState = {
+  error?: string
+  email?: string
+}
+
+const credentialsSchema = z.object({
+  email: z.email("Enter a valid email address."),
+  password: z.string().min(1, "Enter your password."),
+})
+
+export async function login(
+  _previousState: LoginState,
+  formData: FormData
+): Promise<LoginState> {
+  const parsed = credentialsSchema.safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  })
+
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.issues[0]?.message ?? "Enter your email and password.",
+      email: String(formData.get("email") ?? ""),
+    }
   }
 
   const supabase = await createClient()
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
-    password,
-  })
+  const { error } = await supabase.auth.signInWithPassword(parsed.data)
 
   if (error) {
-    console.log(error)
-    redirect("/a/login?error=invalid-credentials")
+    return {
+      error:
+        error.message === "Email not confirmed"
+          ? "Confirm your email address before signing in."
+          : "Invalid email or password. Please try again.",
+      email: parsed.data.email,
+    }
   }
 
-  redirect("/d/test")
+  const next = formData.get("next")
+  const requested =
+    typeof next === "string" &&
+    next.startsWith("/") &&
+    !next.startsWith("//") &&
+    next !== ""
+      ? next
+      : null
+
+  let fallback = "/dashboard"
+  if (!requested) {
+    const access = await getAccessContext()
+    fallback = access.companyId
+      ? defaultRouteFor(access.permissions)
+      : "/dashboard"
+  }
+
+  redirect(requested ?? fallback)
+}
+
+export async function logout() {
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+  redirect("/login")
 }

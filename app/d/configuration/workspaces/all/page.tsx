@@ -20,6 +20,20 @@ import { fetchWorkspaces } from "@/actions/workspace.action"
 import { FilterPayload } from "@/types/data-table"
 
 export default function Page() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="p-8 text-center text-sm text-muted-foreground">
+          Loading workspaces…
+        </div>
+      }
+    >
+      <WorkspacesContent />
+    </React.Suspense>
+  )
+}
+
+function WorkspacesContent() {
   // 1. Sync table state with URL search parameters
   const { pagination, sorting, columnFilters, globalFilter } =
     useUrlTableState()
