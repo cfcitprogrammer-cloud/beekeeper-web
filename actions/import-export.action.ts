@@ -40,13 +40,22 @@ const EMPLOYEE_HEADERS = [
 const OUTLET_HEADERS = [
   "code",
   "name",
+  "description",
   "address",
+  "region",
+  "province",
+  "city",
+  "barangay",
+  "zip_code",
+  "is_distributor",
+  "distributor_code",
   "contact_person",
   "phone",
   "email",
   "latitude",
   "longitude",
   "geofence_radius_m",
+  "is_active",
   "status",
 ] as const
 
@@ -382,6 +391,17 @@ export async function importOutlets(
   let imported = 0
   let skipped = 0
 
+  const { data: existingOutlets } = await supabase
+    .from("outlets")
+    .select("id, code")
+    .eq("company_id", companyId)
+  const distributorMap = new Map(
+    ((existingOutlets ?? []) as { id: string; code: string }[]).map((outlet) => [
+      outlet.code.toUpperCase(),
+      outlet.id,
+    ])
+  )
+
   for (let index = 1; index < parsed.length; index += 1) {
     const row = parsed[index]
     const rowNumber = index + 1
@@ -417,19 +437,39 @@ export async function importOutlets(
     }
 
     const status = dbOutletStatus(cell(row, map, "status"))
+    const isActiveCell = cell(row, map, "is_active").toLowerCase()
+    const isActive =
+      isActiveCell === ""
+        ? status === "approved"
+        : ["true", "1", "yes", "y"].includes(isActiveCell)
     const { error } = await supabase.from("outlets").insert({
       company_id: companyId,
       workspace_id: workspaceId,
       code,
       name,
+      description: cell(row, map, "description") || null,
       address: cell(row, map, "address") || null,
+      region: cell(row, map, "region") || null,
+      province: cell(row, map, "province") || null,
+      city: cell(row, map, "city") || null,
+      barangay: cell(row, map, "barangay") || null,
+      zip_code: cell(row, map, "zip_code") || null,
+      is_distributor: ["true", "1", "yes", "y"].includes(
+        cell(row, map, "is_distributor").toLowerCase()
+      ),
+      distributor_id: ["true", "1", "yes", "y"].includes(
+        cell(row, map, "is_distributor").toLowerCase()
+      )
+        ? null
+        : (distributorMap.get(cell(row, map, "distributor_code").toUpperCase()) ??
+          null),
       contact_person: cell(row, map, "contact_person") || null,
       phone: cell(row, map, "phone") || null,
       email: cell(row, map, "email") || null,
       latitude,
       longitude,
       geofence_radius_m: radius,
-      is_active: status === "approved",
+      is_active: isActive,
       status,
       submitted_at: status === "pending_approval" ? new Date().toISOString() : null,
       approved_at: status === "approved" ? new Date().toISOString() : null,

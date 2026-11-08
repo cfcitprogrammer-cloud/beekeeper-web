@@ -47,6 +47,7 @@ const segmentLabels: Record<string, string> = {
   requests: "Review queue",
   balances: "Balances",
   outlets: "Outlets",
+  workspaces: "Workspaces",
   inventory: "Inventory",
   skus: "SKU catalog",
   bookings: "Bookings",

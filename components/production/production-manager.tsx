@@ -79,15 +79,12 @@ export function ProductionManager({
   const [usageDraft, setUsageDraft] = React.useState(emptyUsage)
   const [saving, setSaving] = React.useState(false)
 
-  React.useEffect(() => {
-    if (!selectedPipelineId && pipelines[0]) setSelectedPipelineId(pipelines[0].id)
-    if (selectedPipelineId && !pipelines.some((pipeline) => pipeline.id === selectedPipelineId)) {
-      setSelectedPipelineId(pipelines[0]?.id ?? "")
-    }
-  }, [pipelines, selectedPipelineId])
-
+  const resolvedPipelineId =
+    selectedPipelineId && pipelines.some((pipeline) => pipeline.id === selectedPipelineId)
+      ? selectedPipelineId
+      : (pipelines[0]?.id ?? "")
   const selectedPipeline =
-    pipelines.find((pipeline) => pipeline.id === selectedPipelineId) ?? null
+    pipelines.find((pipeline) => pipeline.id === resolvedPipelineId) ?? null
   const selectedRun =
     selectedPipeline?.runs.find((run) => run.id === selectedRunId) ?? null
   const runUsage = selectedRun ? usage.filter((entry) => entry.run_id === selectedRun.id) : []

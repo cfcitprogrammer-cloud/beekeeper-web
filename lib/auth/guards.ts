@@ -20,3 +20,20 @@ export async function requirePermission(permission: PermissionKey) {
 
   return access
 }
+
+/**
+ * Server-side guard restricted to the seeded Super Admin role.
+ */
+export async function requireSuperAdmin() {
+  const access = await getAccessContext()
+
+  if (!access.user) {
+    redirect("/login")
+  }
+
+  if (access.user.role !== "Super Admin") {
+    redirect("/forbidden")
+  }
+
+  return access
+}

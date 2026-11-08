@@ -812,6 +812,20 @@ export async function getWorkspaceLocations(): Promise<QueryResult<WorkspaceLoca
   return empty((data as WorkspaceLocation[] | null) ?? [])
 }
 
+export async function getWorkspaces(): Promise<QueryResult<Workspace[]>> {
+  const supabase = await createClient()
+  const access = await getAccessContext()
+  if (!access.companyId) return empty([])
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("company_id", access.companyId)
+    .order("name")
+
+  logError("workspaces", error)
+  return empty((data as Workspace[] | null) ?? [])
+}
+
 /* -------------------------------------------------------------------------- */
 
 export async function getOutlets(): Promise<

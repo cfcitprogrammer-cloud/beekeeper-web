@@ -13,13 +13,22 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 export type CreateOutletInput = {
   name: string
   code: string
+  description?: string
   address?: string
+  region?: string
+  province?: string
+  city?: string
+  barangay?: string
+  zipCode?: string
   contactPerson?: string
   phone?: string
   email?: string
   latitude?: number
   longitude?: number
   geofenceRadiusM?: number
+  isActive?: boolean
+  isDistributor?: boolean
+  distributorId?: string | null
 }
 
 export type UpdateOutletInput = CreateOutletInput & { id: string }
@@ -55,13 +64,22 @@ export async function updateOutlet(
     .update({
       name: input.name.trim(),
       code: input.code.trim().toUpperCase(),
+      description: input.description?.trim() || null,
       address: input.address?.trim() || null,
+      region: input.region?.trim() || null,
+      province: input.province?.trim() || null,
+      city: input.city?.trim() || null,
+      barangay: input.barangay?.trim() || null,
+      zip_code: input.zipCode?.trim() || null,
       contact_person: input.contactPerson?.trim() || null,
       phone: input.phone?.trim() || null,
       email: input.email?.trim() || null,
       latitude: input.latitude ?? 14.5995,
       longitude: input.longitude ?? 120.9842,
       geofence_radius_m: input.geofenceRadiusM ?? 150,
+      ...(input.isActive === undefined ? {} : { is_active: input.isActive }),
+      is_distributor: input.isDistributor ?? false,
+      distributor_id: input.isDistributor ? null : (input.distributorId ?? null),
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
@@ -146,14 +164,22 @@ export async function createOutlet(
       workspace_id: workspaceId,
       name: input.name.trim(),
       code: input.code.trim().toUpperCase(),
+      description: input.description?.trim() || null,
       address: input.address?.trim() || null,
+      region: input.region?.trim() || null,
+      province: input.province?.trim() || null,
+      city: input.city?.trim() || null,
+      barangay: input.barangay?.trim() || null,
+      zip_code: input.zipCode?.trim() || null,
       contact_person: input.contactPerson?.trim() || null,
       phone: input.phone?.trim() || null,
       email: input.email?.trim() || null,
       latitude: input.latitude ?? 14.5995,
       longitude: input.longitude ?? 120.9842,
       geofence_radius_m: input.geofenceRadiusM ?? 150,
-      is_active: false,
+      is_active: input.isActive ?? false,
+      is_distributor: input.isDistributor ?? false,
+      distributor_id: input.isDistributor ? null : (input.distributorId ?? null),
       status: "pending_approval",
       submitted_at: new Date().toISOString(),
       created_by: userId,

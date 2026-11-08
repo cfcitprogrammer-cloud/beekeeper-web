@@ -16,7 +16,6 @@ import {
   getActivityFeed,
   getMonitoringSnapshot,
 } from "@/actions/feed.action"
-import { humanize } from "@/lib/format"
 
 export default async function FeedPage() {
   await requirePermission(PERMISSIONS.FEED_VIEW)

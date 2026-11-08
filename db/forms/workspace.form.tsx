@@ -36,7 +36,7 @@ export function WorkspaceForm() {
     defaultValues: {
       name: "",
       code: "",
-      description: "",
+      address: "",
     },
   })
 
@@ -47,9 +47,7 @@ export function WorkspaceForm() {
       toast.add({
         type: "error",
         title: "Failed to create workspace",
-        description: result.error
-          ? result.message
-          : "Server error. Please contact administrator",
+        description: result.error,
       })
 
       return
@@ -60,7 +58,7 @@ export function WorkspaceForm() {
         description: "Workspace is created successfully",
       })
 
-      router.push("/d/configuration/workspaces/all")
+      router.push("/workspaces")
     }
   }
 
@@ -138,16 +136,16 @@ export function WorkspaceForm() {
 
               {/* Description Field */}
               <Controller
-                name="description"
+                name="address"
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="workspace-description">
-                      Description
+                    <FieldLabel htmlFor="workspace-address">
+                      Address
                     </FieldLabel>
                     <Input
                       {...field}
-                      id="workspace-description"
+                      id="workspace-address"
                       aria-invalid={fieldState.invalid}
                       placeholder="Main engineering workspace for core services"
                       autoComplete="off"

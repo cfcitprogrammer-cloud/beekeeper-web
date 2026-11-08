@@ -7,6 +7,7 @@ import {
   Activity,
   ArrowLeftRight,
   BarChart3,
+  Building2,
   CalendarDays,
   ChevronRight,
   Clock3,
@@ -65,6 +66,7 @@ type NavItem = {
   href: string
   icon: React.ElementType
   permission?: PermissionKey
+  superAdminOnly?: boolean
   children?: NavChild[]
 }
 
@@ -303,6 +305,23 @@ export const navSections: NavSection[] = [
       },
     ],
   },
+  {
+    label: "System",
+    items: [
+      {
+        title: "Workspaces",
+        href: "/workspaces",
+        icon: Building2,
+        superAdminOnly: true,
+      },
+      {
+        title: "Create workspace",
+        href: "/workspaces/new",
+        icon: Building2,
+        superAdminOnly: true,
+      },
+    ],
+  },
 ]
 
 function isPathActive(pathname: string, href: string) {
@@ -415,7 +434,9 @@ export function AppSidebar({
           items: section.items
             .filter(
               (item) =>
-                !item.permission || hasPermission(permissions, item.permission)
+                (!item.permission ||
+                  hasPermission(permissions, item.permission)) &&
+                (!item.superAdminOnly || user.role === "Super Admin")
             )
             .map((item) => ({
               ...item,
@@ -428,7 +449,7 @@ export function AppSidebar({
             .filter((item) => !item.children || item.children.length > 0),
         }))
         .filter((section) => section.items.length > 0),
-    [permissions]
+    [permissions, user.role]
   )
 
   return (

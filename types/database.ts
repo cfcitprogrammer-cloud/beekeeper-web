@@ -414,7 +414,13 @@ export interface Outlet {
   workspace_id: UUID
   code: string
   name: string
+  description: string | null
   address: string | null
+  region: string | null
+  province: string | null
+  city: string | null
+  barangay: string | null
+  zip_code: string | null
   contact_person: string | null
   phone: string | null
   email: string | null
@@ -424,6 +430,8 @@ export interface Outlet {
   geofence_polygon: Db.GeoJsonPolygon | null
   photo_path: string | null
   is_active: boolean
+  is_distributor: boolean
+  distributor_id: UUID | null
   status: OutletStatus
   submitted_at: ISODateTime | null
   approved_at: ISODateTime | null

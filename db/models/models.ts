@@ -327,7 +327,13 @@ export type Outlet = {
   workspace_id: string
   code: string
   name: string
+  description: string | null
   address: string | null
+  region: string | null
+  province: string | null
+  city: string | null
+  barangay: string | null
+  zip_code: string | null
   contact_person: string | null
   phone: string | null
   email: string | null
@@ -337,6 +343,8 @@ export type Outlet = {
   geofence_polygon: GeoJsonPolygon | null
   photo_path: string | null
   is_active: boolean
+  is_distributor: boolean
+  distributor_id: string | null
   status: DocumentStatus
   submitted_at: string | null
   approved_at: string | null
