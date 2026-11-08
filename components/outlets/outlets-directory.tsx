@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { Building2, Download, MapPin, Pencil, Plus, Store, Trash2 } from "lucide-react"
 
 import { createOutlet, deleteOutlet, updateOutlet } from "@/actions/outlet.action"
+import { exportOutlets } from "@/actions/import-export.action"
+import { MapLocationPicker } from "@/components/outlets/map-location-picker"
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { Modal } from "@/components/shared/modal"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -24,6 +26,8 @@ const emptyDraft = {
   phone: "",
   email: "",
   geofence_radius_m: "150",
+  latitude: 14.5995,
+  longitude: 120.9842,
 }
 
 export function OutletsDirectory({
@@ -66,6 +70,8 @@ export function OutletsDirectory({
       phone: draft.phone,
       email: draft.email,
       geofenceRadiusM: Number(draft.geofence_radius_m) || 150,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
     }
 
     const result = editingId
@@ -106,6 +112,26 @@ export function OutletsDirectory({
     router.refresh()
   }
 
+  async function exportOutletsHandler() {
+    const result = await exportOutlets()
+    if (!result.success) {
+      toast.add({ type: "error", title: "Could not export outlets", description: result.error })
+      return
+    }
+    const blob = new Blob([result.data.csv], { type: "text/csv;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = result.data.filename
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.add({
+      type: "success",
+      title: "Export ready",
+      description: `${result.data.rowCount} outlet(s) exported.`,
+    })
+  }
+
   function openCreate() {
     setEditingId(null)
     setDraft(emptyDraft)
@@ -122,6 +148,8 @@ export function OutletsDirectory({
       phone: outlet.phone ?? "",
       email: outlet.email ?? "",
       geofence_radius_m: String(outlet.geofence_radius_m ?? 150),
+      latitude: outlet.latitude ?? 14.5995,
+      longitude: outlet.longitude ?? 120.9842,
     })
     setOpen(true)
   }
@@ -250,7 +278,7 @@ export function OutletsDirectory({
         }
         toolbar={
           <>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={exportOutletsHandler}>
               <Download />
               Export
             </Button>
@@ -277,7 +305,7 @@ export function OutletsDirectory({
             ? "Update outlet details."
             : "New outlets are routed through the onboarding approval template."
         }
-        size="lg"
+        size="xl"
         footer={
           <>
             <Button variant="outline" onClick={() => setOpen(false)}>
@@ -359,6 +387,17 @@ export function OutletsDirectory({
               value={draft.geofence_radius_m}
               onChange={(event) =>
                 setDraft({ ...draft, geofence_radius_m: event.target.value })
+              }
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Map location</Label>
+            <MapLocationPicker
+              key={`${editingId ?? "new"}-${open ? "open" : "closed"}`}
+              latitude={draft.latitude}
+              longitude={draft.longitude}
+              onChange={(latitude, longitude) =>
+                setDraft({ ...draft, latitude, longitude })
               }
             />
           </div>

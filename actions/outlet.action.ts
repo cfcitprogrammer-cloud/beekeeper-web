@@ -7,6 +7,7 @@ import {
   getAuthorizedContext,
   type ActionResult,
 } from "@/actions/helpers/context"
+import { logActivity } from "@/actions/helpers/activity"
 import { PERMISSIONS } from "@/lib/auth/permissions"
 
 export type CreateOutletInput = {
@@ -23,6 +24,17 @@ export type CreateOutletInput = {
 
 export type UpdateOutletInput = CreateOutletInput & { id: string }
 
+function validateCoordinates(latitude?: number, longitude?: number) {
+  if (latitude === undefined || longitude === undefined) return null
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    return "Latitude must be between -90 and 90."
+  }
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    return "Longitude must be between -180 and 180."
+  }
+  return null
+}
+
 export async function updateOutlet(
   input: UpdateOutletInput
 ): Promise<ActionResult<{ id: string }>> {
@@ -30,11 +42,13 @@ export async function updateOutlet(
   if (!input.name.trim() || !input.code.trim()) {
     return failure("Outlet name and code are required.")
   }
+  const coordinateError = validateCoordinates(input.latitude, input.longitude)
+  if (coordinateError) return failure(coordinateError)
 
   const authorized = await getAuthorizedContext(PERMISSIONS.OUTLETS_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("outlets")
@@ -59,8 +73,17 @@ export async function updateOutlet(
     return failure(error.message)
   }
 
+  await logActivity(supabase, { companyId, workspaceId, userId: authorized.context.userId }, authorized.context.employee?.id ?? null, {
+    action: "update",
+    entityType: "outlet",
+    entityId: input.id,
+    summary: `Updated outlet ${input.name.trim()}`,
+  })
+
   revalidatePath("/outlets")
+  revalidatePath("/outlets/assignments")
   revalidatePath("/dashboard")
+  revalidatePath("/feed")
   return { success: true, data }
 }
 
@@ -70,7 +93,7 @@ export async function deleteOutlet(id: string): Promise<ActionResult<{ id: strin
   const authorized = await getAuthorizedContext(PERMISSIONS.OUTLETS_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("outlets")
@@ -83,8 +106,17 @@ export async function deleteOutlet(id: string): Promise<ActionResult<{ id: strin
     return failure(error.message)
   }
 
+  await logActivity(supabase, { companyId, workspaceId, userId: authorized.context.userId }, authorized.context.employee?.id ?? null, {
+    action: "delete",
+    entityType: "outlet",
+    entityId: id,
+    summary: "Deleted an outlet",
+  })
+
   revalidatePath("/outlets")
+  revalidatePath("/outlets/assignments")
   revalidatePath("/dashboard")
+  revalidatePath("/feed")
   return { success: true, data: { id } }
 }
 export async function createOutlet(
@@ -93,6 +125,8 @@ export async function createOutlet(
   if (!input.name.trim() || !input.code.trim()) {
     return failure("Outlet name and code are required.")
   }
+  const coordinateError = validateCoordinates(input.latitude, input.longitude)
+  if (coordinateError) return failure(coordinateError)
 
   const authorized = await getAuthorizedContext(PERMISSIONS.OUTLETS_CREATE)
   if ("error" in authorized) return authorized.error
@@ -132,9 +166,19 @@ export async function createOutlet(
     return failure(error.message)
   }
 
+  await logActivity(supabase, { companyId, workspaceId, userId }, authorized.context.employee?.id ?? null, {
+    action: "create",
+    entityType: "outlet",
+    entityId: data.id,
+    summary: `Submitted outlet ${input.name.trim()} for onboarding`,
+    metadata: { latitude: input.latitude ?? 14.5995, longitude: input.longitude ?? 120.9842 },
+  })
+
   revalidatePath("/outlets")
+  revalidatePath("/outlets/assignments")
   revalidatePath("/approvals/inbox")
   revalidatePath("/dashboard")
+  revalidatePath("/feed")
 
   return { success: true, data }
 }

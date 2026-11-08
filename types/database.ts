@@ -120,6 +120,38 @@ export type HolidayType = (typeof HOLIDAY_TYPES)[number]
 export const MEMBER_STATUSES = ["ACTIVE", "INVITED", "SUSPENDED"] as const
 export type MemberStatus = (typeof MEMBER_STATUSES)[number]
 
+export const EXPENSE_PLAN_STATUSES = [
+  "DRAFT",
+  "SUBMITTED",
+  "APPROVED",
+  "REJECTED",
+  "CLOSED",
+] as const
+export type ExpensePlanStatus = (typeof EXPENSE_PLAN_STATUSES)[number]
+
+export const EXPENSE_STATUSES = [
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+  "REIMBURSED",
+  "CANCELLED",
+] as const
+export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number]
+
+export const PRODUCTION_RUN_STATUSES = [
+  "PLANNED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED",
+] as const
+export type ProductionRunStatus = (typeof PRODUCTION_RUN_STATUSES)[number]
+
+export const VISIT_PLAN_STATUSES = ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"] as const
+export type VisitPlanStatus = (typeof VISIT_PLAN_STATUSES)[number]
+
+export const VISIT_STATUSES = ["CHECKED_IN", "CHECKED_OUT", "CANCELLED"] as const
+export type VisitStatus = (typeof VISIT_STATUSES)[number]
+
 /* -------------------------------------------------------------------------- */
 /*                                  Tenancy                                   */
 /* -------------------------------------------------------------------------- */
@@ -198,6 +230,10 @@ export interface Employee {
   workspace_id: UUID
   user_id: UUID | null
   employee_no: string
+  sss_no: string | null
+  philhealth_no: string | null
+  tin_no: string | null
+  pagibig_no: string | null
   first_name: string
   middle_name: string | null
   last_name: string
@@ -423,6 +459,199 @@ export interface Sku {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                          Operations extensions                             */
+/* -------------------------------------------------------------------------- */
+
+export interface EmployeeOutletAssignment {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  employee_id: UUID
+  outlet_id: UUID
+  assigned_by: UUID | null
+  assigned_at: ISODateTime
+  unassigned_at: ISODateTime | null
+  is_active: boolean
+  notes: string | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface ExpensePlan {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  employee_id: UUID
+  title: string
+  description: string | null
+  start_date: ISODate
+  end_date: ISODate
+  status: ExpensePlanStatus
+  currency: string
+  total_amount: number
+  created_by: UUID | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface Expense {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  plan_id: UUID
+  employee_id: UUID
+  expense_date: ISODate
+  category: string
+  description: string
+  amount: number
+  currency: string
+  receipt_path: string | null
+  status: ExpenseStatus
+  notes: string | null
+  created_by: UUID | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface ProductionPipeline {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  name: string
+  code: string
+  description: string | null
+  is_active: boolean
+  created_by: UUID | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface ProductionStage {
+  id: UUID
+  company_id: UUID
+  pipeline_id: UUID
+  name: string
+  sequence: number
+  stage_type: string
+  input_uom: string | null
+  output_uom: string | null
+  description: string | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface ProductionRun {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  pipeline_id: UUID
+  run_no: string
+  status: ProductionRunStatus
+  started_at: ISODateTime | null
+  completed_at: ISODateTime | null
+  notes: string | null
+  created_by: UUID | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface ProductionUsage {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  pipeline_id: UUID
+  run_id: UUID
+  stage_id: UUID
+  source_stage_id: UUID | null
+  input_quantity: number
+  output_quantity: number
+  waste_quantity: number
+  uom: string | null
+  notes: string | null
+  recorded_by: UUID | null
+  recorded_at: ISODateTime
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface VisitPlan {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  employee_id: UUID
+  name: string
+  start_date: ISODate
+  end_date: ISODate
+  notes: string | null
+  status: VisitPlanStatus
+  created_by: UUID | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface VisitPlanOutlet {
+  id: UUID
+  company_id: UUID
+  plan_id: UUID
+  outlet_id: UUID
+  planned_date: ISODate | null
+  notes: string | null
+  created_at: ISODateTime
+}
+
+export interface Visit {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID
+  employee_id: UUID
+  outlet_id: UUID
+  plan_id: UUID | null
+  is_planned: boolean
+  planned_date: ISODate | null
+  check_in_at: ISODateTime
+  check_out_at: ISODateTime | null
+  check_in_latitude: number | null
+  check_in_longitude: number | null
+  check_out_latitude: number | null
+  check_out_longitude: number | null
+  check_in_distance_m: number | null
+  notes: string | null
+  status: VisitStatus
+  created_by: UUID | null
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface ActivityFeed {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID | null
+  actor_user_id: UUID | null
+  actor_employee_id: UUID | null
+  action: string
+  entity_type: string
+  entity_id: UUID | null
+  summary: string
+  metadata: Db.Json
+  created_at: ISODateTime
+}
+
+export interface OperationalMonitoring {
+  company_id: UUID
+  workspace_id: UUID
+  workspace_name: string
+  active_employees: number
+  active_outlets: number
+  active_assignments: number
+  visits_today: number
+  unplanned_visits_7d: number
+  open_expense_plans: number
+  pending_expenses: number
+  runs_in_progress: number
+  activity_24h: number
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                  Bookings                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -641,6 +870,17 @@ export type Database = {
       leave_balances: TableDefinition<Db.LeaveBalance>
       leave_requests: TableDefinition<Db.LeaveRequest>
       outlets: TableDefinition<Db.Outlet>
+      employee_outlet_assignments: TableDefinition<Db.EmployeeOutletAssignment>
+      expense_plans: TableDefinition<Db.ExpensePlan>
+      expenses: TableDefinition<Db.Expense>
+      production_pipelines: TableDefinition<Db.ProductionPipeline>
+      production_stages: TableDefinition<Db.ProductionStage>
+      production_runs: TableDefinition<Db.ProductionRun>
+      production_usage: TableDefinition<Db.ProductionUsage>
+      visit_plans: TableDefinition<Db.VisitPlan>
+      visit_plan_outlets: TableDefinition<Db.VisitPlanOutlet>
+      visits: TableDefinition<Db.Visit>
+      activity_feed: TableDefinition<Db.ActivityFeed>
       sku_categories: TableDefinition<Db.SkuCategory>
       skus: TableDefinition<Db.Sku>
       bookings: TableDefinition<Db.Booking>
@@ -658,6 +898,7 @@ export type Database = {
     Views: {
       attendance_daily: ViewDefinition<Db.AttendanceDaily>
       my_pending_approvals: ViewDefinition<Db.MyPendingApproval>
+      operational_monitoring: ViewDefinition<Db.OperationalMonitoring>
     }
     Functions: Record<string, never>
     Enums: {

@@ -4,16 +4,22 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
+  Activity,
+  ArrowLeftRight,
   CalendarDays,
   Clock3,
+  Factory,
   Fingerprint,
   LayoutDashboard,
+  MapPinned,
   Package,
+  Route,
   Search,
   ShieldCheck,
   ShoppingCart,
   Store,
   Users,
+  Wallet,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -43,9 +49,15 @@ const quickLinks = [
   { title: "Holidays", href: "/attendance/holidays", icon: Clock3, group: "Time & attendance" },
   { title: "Attendance locations", href: "/attendance/locations", icon: Clock3, group: "Time & attendance" },
   { title: "Outlet directory", href: "/outlets", icon: Store, group: "Field operations" },
+  { title: "Outlet assignments", href: "/outlets/assignments", icon: MapPinned, group: "Field operations" },
+  { title: "Visits", href: "/visits", icon: Route, group: "Field operations" },
+  { title: "Expenses", href: "/expenses", icon: Wallet, group: "Field operations" },
+  { title: "Production", href: "/production", icon: Factory, group: "Field operations" },
   { title: "SKU catalog", href: "/inventory/skus", icon: Package, group: "Field operations" },
   { title: "SKU categories", href: "/inventory/categories", icon: Package, group: "Field operations" },
   { title: "Bookings register", href: "/bookings", icon: ShoppingCart, group: "Field operations" },
+  { title: "Activity feed", href: "/feed", icon: Activity, group: "Overview" },
+  { title: "Import & export", href: "/import-export", icon: ArrowLeftRight, group: "Data" },
   { title: "Approval inbox", href: "/approvals/inbox", icon: ShieldCheck, group: "Governance" },
   { title: "Approval stages", href: "/approvals/stages", icon: ShieldCheck, group: "Governance" },
   { title: "Approval templates", href: "/approvals/templates", icon: ShieldCheck, group: "Governance" },

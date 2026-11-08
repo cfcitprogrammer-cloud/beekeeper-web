@@ -4,18 +4,24 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  Activity,
+  ArrowLeftRight,
   BarChart3,
   CalendarDays,
   ChevronRight,
   Clock3,
+  Factory,
   Fingerprint,
   Hexagon,
   LayoutDashboard,
+  MapPinned,
   Package,
+  Route,
   ShieldCheck,
   ShoppingCart,
   Store,
   Users,
+  Wallet,
 } from "lucide-react"
 
 import {
@@ -76,6 +82,12 @@ export const navSections: NavSection[] = [
         href: "/dashboard",
         icon: LayoutDashboard,
         permission: PERMISSIONS.DASHBOARD_VIEW,
+      },
+      {
+        title: "Activity feed",
+        href: "/feed",
+        icon: Activity,
+        permission: PERMISSIONS.FEED_VIEW,
       },
     ],
   },
@@ -196,6 +208,30 @@ export const navSections: NavSection[] = [
         permission: PERMISSIONS.OUTLETS_VIEW,
       },
       {
+        title: "Outlet assignments",
+        href: "/outlets/assignments",
+        icon: MapPinned,
+        permission: PERMISSIONS.OUTLETS_VIEW,
+      },
+      {
+        title: "Visits",
+        href: "/visits",
+        icon: Route,
+        permission: PERMISSIONS.VISITS_VIEW,
+      },
+      {
+        title: "Expenses",
+        href: "/expenses",
+        icon: Wallet,
+        permission: PERMISSIONS.EXPENSES_VIEW,
+      },
+      {
+        title: "Production",
+        href: "/production",
+        icon: Factory,
+        permission: PERMISSIONS.PRODUCTION_VIEW,
+      },
+      {
         title: "Inventory",
         href: "/inventory/skus",
         icon: Package,
@@ -218,6 +254,17 @@ export const navSections: NavSection[] = [
         href: "/bookings",
         icon: ShoppingCart,
         permission: PERMISSIONS.BOOKINGS_VIEW,
+      },
+    ],
+  },
+  {
+    label: "Data",
+    items: [
+      {
+        title: "Import & export",
+        href: "/import-export",
+        icon: ArrowLeftRight,
+        permission: PERMISSIONS.IMPORTS_VIEW,
       },
     ],
   },

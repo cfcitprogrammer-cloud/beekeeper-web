@@ -53,6 +53,12 @@ const segmentLabels: Record<string, string> = {
   approvals: "Approvals",
   inbox: "Inbox",
   templates: "Templates",
+  assignments: "Assignments",
+  expenses: "Expenses",
+  production: "Production",
+  visits: "Visits",
+  "import-export": "Import & export",
+  feed: "Activity feed",
 }
 
 function useBreadcrumbs() {

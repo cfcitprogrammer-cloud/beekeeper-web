@@ -7,10 +7,16 @@ import {
   getAuthorizedContext,
   type ActionResult,
 } from "@/actions/helpers/context"
+import { logActivity } from "@/actions/helpers/activity"
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/utils/supabase/admin"
 
 export type CreateEmployeeInput = {
+  employeeNo?: string
+  sssNo?: string
+  philhealthNo?: string
+  tinNo?: string
+  pagibigNo?: string
   firstName: string
   middleName?: string
   lastName: string
@@ -64,6 +70,11 @@ function dbGender(value?: string) {
   return value.toLowerCase()
 }
 
+function statutoryId(value?: string) {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed.toUpperCase() : null
+}
+
 export type UpdateEmployeeInput = CreateEmployeeInput & { id: string }
 
 export async function updateEmployee(
@@ -82,6 +93,11 @@ export async function updateEmployee(
   const { data, error } = await supabase
     .from("employees")
     .update({
+      ...(input.employeeNo?.trim() ? { employee_no: input.employeeNo.trim() } : {}),
+      sss_no: statutoryId(input.sssNo),
+      philhealth_no: statutoryId(input.philhealthNo),
+      tin_no: statutoryId(input.tinNo),
+      pagibig_no: statutoryId(input.pagibigNo),
       first_name: input.firstName.trim(),
       middle_name: input.middleName?.trim() || null,
       last_name: input.lastName.trim(),
@@ -114,9 +130,17 @@ export async function updateEmployee(
     return failure(error.message)
   }
 
+  await logActivity(supabase, { companyId, workspaceId, userId: authorized.context.userId }, authorized.context.employee?.id ?? null, {
+    action: "update",
+    entityType: "employee",
+    entityId: input.id,
+    summary: `Updated employee ${input.firstName.trim()} ${input.lastName.trim()}`,
+  })
+
   revalidatePath("/employees")
   revalidatePath(`/employees/${input.id}`)
   revalidatePath("/dashboard")
+  revalidatePath("/feed")
   return { success: true, data }
 }
 
@@ -126,7 +150,7 @@ export async function deleteEmployee(id: string): Promise<ActionResult<{ id: str
   const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("employees")
@@ -139,8 +163,16 @@ export async function deleteEmployee(id: string): Promise<ActionResult<{ id: str
     return failure(error.message)
   }
 
+  await logActivity(supabase, { companyId, workspaceId, userId: authorized.context.userId }, authorized.context.employee?.id ?? null, {
+    action: "delete",
+    entityType: "employee",
+    entityId: id,
+    summary: "Deleted an employee record",
+  })
+
   revalidatePath("/employees")
   revalidatePath("/dashboard")
+  revalidatePath("/feed")
   return { success: true, data: { id } }
 }
 
@@ -162,10 +194,20 @@ export async function createEmployee(
     )
   }
 
+  if (input.createAccount) {
+    if (!input.email?.trim()) {
+      return failure("A work email is required to create a login account.")
+    }
+    if (!input.password || input.password.length < 8) {
+      return failure("The login password must be at least 8 characters.")
+    }
+  }
+
   // Optionally create a Supabase auth account for the employee.
   let userId: string | null = null
+  let adminClient: ReturnType<typeof createAdminClient> = null
   if (input.createAccount && input.email?.trim() && input.password) {
-    const adminClient = createAdminClient()
+    adminClient = createAdminClient()
     if (adminClient) {
       const { data: created, error: createError } =
         await adminClient.auth.admin.createUser({
@@ -205,7 +247,8 @@ export async function createEmployee(
     .select("id", { count: "exact", head: true })
     .eq("company_id", companyId)
 
-  const employeeNo = `EMP-${String((count ?? 0) + 1).padStart(4, "0")}`
+  const employeeNo =
+    input.employeeNo?.trim() || `EMP-${String((count ?? 0) + 1).padStart(4, "0")}`
 
   const { data, error } = await supabase
     .from("employees")
@@ -214,6 +257,10 @@ export async function createEmployee(
       workspace_id: workspaceId,
       user_id: userId,
       employee_no: employeeNo,
+      sss_no: statutoryId(input.sssNo),
+      philhealth_no: statutoryId(input.philhealthNo),
+      tin_no: statutoryId(input.tinNo),
+      pagibig_no: statutoryId(input.pagibigNo),
       first_name: input.firstName.trim(),
       middle_name: input.middleName?.trim() || null,
       last_name: input.lastName.trim(),
@@ -240,11 +287,23 @@ export async function createEmployee(
 
   if (error) {
     console.error("[action:createEmployee]", error)
+    if (userId && adminClient) {
+      await adminClient.auth.admin.deleteUser(userId)
+    }
     return failure(error.message)
   }
 
+  await logActivity(supabase, { companyId, workspaceId, userId: authorized.context.userId }, authorized.context.employee?.id ?? null, {
+    action: "create",
+    entityType: "employee",
+    entityId: data.id,
+    summary: `Onboarded ${input.firstName.trim()} ${input.lastName.trim()} (${data.employee_no})`,
+    metadata: { employee_no: data.employee_no, login_created: Boolean(userId) },
+  })
+
   revalidatePath("/employees")
   revalidatePath("/dashboard")
+  revalidatePath("/feed")
 
   return { success: true, data }
 }

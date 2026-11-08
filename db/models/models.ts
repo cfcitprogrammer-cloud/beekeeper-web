@@ -16,6 +16,11 @@ export type HolidayType = "regular" | "special" | "company"
 export type DocumentStatus = "draft" | "pending_approval" | "approved" | "rejected" | "cancelled"
 export type ApprovalDocumentType = "booking" | "outlet"
 export type StageStatus = "waiting" | "pending" | "approved" | "rejected" | "skipped"
+export type ExpensePlanStatus = "draft" | "submitted" | "approved" | "rejected" | "closed"
+export type ExpenseStatus = "pending" | "approved" | "rejected" | "reimbursed" | "cancelled"
+export type ProductionRunStatus = "planned" | "in_progress" | "completed" | "cancelled"
+export type VisitPlanStatus = "draft" | "active" | "completed" | "cancelled"
+export type VisitStatus = "checked_in" | "checked_out" | "cancelled"
 
 // GeoJSON polygon, positions are [longitude, latitude]
 export type GeoJsonPolygon = {
@@ -138,6 +143,10 @@ export type Employee = {
   workspace_id: string
   user_id: string | null
   employee_no: string
+  sss_no: string | null
+  philhealth_no: string | null
+  tin_no: string | null
+  pagibig_no: string | null
   first_name: string
   middle_name: string | null
   last_name: string
@@ -535,4 +544,209 @@ export type MyPendingApproval = {
   requested_by: string
   requested_at: string
   document_snapshot: Json
+}
+
+// ---------------------------------------------------------------------------
+// Outlet assignments
+// ---------------------------------------------------------------------------
+export type EmployeeOutletAssignment = {
+  id: string
+  company_id: string
+  workspace_id: string
+  employee_id: string
+  outlet_id: string
+  assigned_by: string | null
+  assigned_at: string
+  unassigned_at: string | null
+  is_active: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+export type ExpensePlan = {
+  id: string
+  company_id: string
+  workspace_id: string
+  employee_id: string
+  title: string
+  description: string | null
+  start_date: string
+  end_date: string
+  status: ExpensePlanStatus
+  currency: string
+  total_amount: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type Expense = {
+  id: string
+  company_id: string
+  workspace_id: string
+  plan_id: string
+  employee_id: string
+  expense_date: string
+  category: string
+  description: string
+  amount: number
+  currency: string
+  receipt_path: string | null
+  status: ExpenseStatus
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Production usage
+// ---------------------------------------------------------------------------
+export type ProductionPipeline = {
+  id: string
+  company_id: string
+  workspace_id: string
+  name: string
+  code: string
+  description: string | null
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProductionStage = {
+  id: string
+  company_id: string
+  pipeline_id: string
+  name: string
+  sequence: number
+  stage_type: string
+  input_uom: string | null
+  output_uom: string | null
+  description: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProductionRun = {
+  id: string
+  company_id: string
+  workspace_id: string
+  pipeline_id: string
+  run_no: string
+  status: ProductionRunStatus
+  started_at: string | null
+  completed_at: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProductionUsage = {
+  id: string
+  company_id: string
+  workspace_id: string
+  pipeline_id: string
+  run_id: string
+  stage_id: string
+  source_stage_id: string | null
+  input_quantity: number
+  output_quantity: number
+  waste_quantity: number
+  uom: string | null
+  notes: string | null
+  recorded_by: string | null
+  recorded_at: string
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Visits
+// ---------------------------------------------------------------------------
+export type VisitPlan = {
+  id: string
+  company_id: string
+  workspace_id: string
+  employee_id: string
+  name: string
+  start_date: string
+  end_date: string
+  notes: string | null
+  status: VisitPlanStatus
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type VisitPlanOutlet = {
+  id: string
+  company_id: string
+  plan_id: string
+  outlet_id: string
+  planned_date: string | null
+  notes: string | null
+  created_at: string
+}
+
+export type Visit = {
+  id: string
+  company_id: string
+  workspace_id: string
+  employee_id: string
+  outlet_id: string
+  plan_id: string | null
+  is_planned: boolean
+  planned_date: string | null
+  check_in_at: string
+  check_out_at: string | null
+  check_in_latitude: number | null
+  check_in_longitude: number | null
+  check_out_latitude: number | null
+  check_out_longitude: number | null
+  check_in_distance_m: number | null
+  notes: string | null
+  status: VisitStatus
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Activity feed + monitoring
+// ---------------------------------------------------------------------------
+export type ActivityFeed = {
+  id: string
+  company_id: string
+  workspace_id: string | null
+  actor_user_id: string | null
+  actor_employee_id: string | null
+  action: string
+  entity_type: string
+  entity_id: string | null
+  summary: string
+  metadata: Json
+  created_at: string
+}
+
+// view: operational_monitoring
+export type OperationalMonitoring = {
+  company_id: string
+  workspace_id: string
+  workspace_name: string
+  active_employees: number
+  active_outlets: number
+  active_assignments: number
+  visits_today: number
+  unplanned_visits_7d: number
+  open_expense_plans: number
+  pending_expenses: number
+  runs_in_progress: number
+  activity_24h: number
 }

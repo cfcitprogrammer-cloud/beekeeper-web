@@ -45,7 +45,15 @@ import {
   type Position,
 } from "@/types/database"
 
-const schema = z.object({
+const schema = z
+  .object({
+  employeeNo: z.string().optional(),
+  sssNo: z.string().optional(),
+  philhealthNo: z.string().optional(),
+  tinNo: z.string().optional(),
+  pagibigNo: z.string().optional(),
+  createAccount: z.boolean(),
+  password: z.string().optional(),
   firstName: z.string().min(1, "First name is required"),
   middleName: z.string().optional(),
   lastName: z.string().min(1, "Last name is required"),
@@ -63,7 +71,22 @@ const schema = z.object({
   hireDate: z.string().min(1, "Select a start date"),
   baseSalary: z.number().min(1, "Enter a base salary"),
   payFrequency: z.enum(PAY_FREQUENCIES),
-})
+  })
+  .superRefine((values, context) => {
+    if (values.createAccount && !values.password) {
+      context.addIssue({
+        code: "custom",
+        path: ["password"],
+        message: "Set a password for the employee login.",
+      })
+    } else if (values.createAccount && (values.password?.length ?? 0) < 8) {
+      context.addIssue({
+        code: "custom",
+        path: ["password"],
+        message: "The password must be at least 8 characters.",
+      })
+    }
+  })
 
 type FormValues = z.infer<typeof schema>
 
@@ -83,6 +106,21 @@ const steps = [
       "gender",
       "civilStatus",
       "address",
+    ] as (keyof FormValues)[],
+  },
+  {
+    id: "government",
+    title: "Government IDs & access",
+    description: "Statutory numbers and employee login",
+    icon: BadgeCheck,
+    fields: [
+      "employeeNo",
+      "sssNo",
+      "philhealthNo",
+      "tinNo",
+      "pagibigNo",
+      "createAccount",
+      "password",
     ] as (keyof FormValues)[],
   },
   {
@@ -116,6 +154,13 @@ const steps = [
 ]
 
 const defaultValues: FormValues = {
+  employeeNo: "",
+  sssNo: "",
+  philhealthNo: "",
+  tinNo: "",
+  pagibigNo: "",
+  createAccount: false,
+  password: "",
   firstName: "",
   middleName: "",
   lastName: "",
@@ -182,6 +227,13 @@ export function EmployeeOnboardingForm({
 
   async function onSubmit(data: FormValues) {
     const result = await createEmployee({
+      employeeNo: data.employeeNo || undefined,
+      sssNo: data.sssNo || undefined,
+      philhealthNo: data.philhealthNo || undefined,
+      tinNo: data.tinNo || undefined,
+      pagibigNo: data.pagibigNo || undefined,
+      createAccount: data.createAccount,
+      password: data.createAccount ? data.password : undefined,
       firstName: data.firstName,
       middleName: data.middleName,
       lastName: data.lastName,
@@ -366,6 +418,75 @@ export function EmployeeOnboardingForm({
               {step === 1 && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
+                    <Label htmlFor="employeeNo">Employee No.</Label>
+                    <Input
+                      id="employeeNo"
+                      placeholder="Auto-generated when blank"
+                      {...register("employeeNo")}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="sssNo">SSS No.</Label>
+                    <Input id="sssNo" placeholder="34-1234567-8" {...register("sssNo")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="philhealthNo">PhilHealth No.</Label>
+                    <Input
+                      id="philhealthNo"
+                      placeholder="12-345678901-2"
+                      {...register("philhealthNo")}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tinNo">TIN No.</Label>
+                    <Input id="tinNo" placeholder="123-456-789-000" {...register("tinNo")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pagibigNo">Pag-IBIG No.</Label>
+                    <Input
+                      id="pagibigNo"
+                      placeholder="1234-5678-9012"
+                      {...register("pagibigNo")}
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2 rounded-lg border p-3">
+                    <label className="flex items-start gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 size-3.5 accent-primary"
+                        {...register("createAccount")}
+                      />
+                      <span>
+                        <span className="block font-medium">
+                          Create a Supabase Auth login
+                        </span>
+                        <span className="block text-[0.625rem] text-muted-foreground">
+                          Uses the work email above. The account is confirmed immediately
+                          when the service role key is configured.
+                        </span>
+                      </span>
+                    </label>
+                    {values.createAccount && (
+                      <div className="mt-3 space-y-1.5">
+                        <Label htmlFor="password">Initial password</Label>
+                        <Input
+                          id="password"
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder="At least 8 characters"
+                          {...register("password")}
+                          aria-invalid={Boolean(errors.password)}
+                        />
+                        <FieldError message={errors.password?.message} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {step === 2 && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="departmentId">Department</Label>
                     <Controller
                       control={control}
@@ -473,7 +594,7 @@ export function EmployeeOnboardingForm({
                 </div>
               )}
 
-              {step === 2 && (
+              {step === 3 && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="baseSalary">Base salary (PHP)</Label>
@@ -511,7 +632,7 @@ export function EmployeeOnboardingForm({
                 </div>
               )}
 
-              {step === 3 && (
+              {step === 4 && (
                 <div className="space-y-4">
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
@@ -563,6 +684,24 @@ export function EmployeeOnboardingForm({
                           ? `${employees.find((item) => item.id === values.managerId)?.first_name} ${employees.find((item) => item.id === values.managerId)?.last_name}`
                           : "No direct manager"
                       }
+                    />
+                    <ReviewItem
+                      label="Employee No."
+                      value={values.employeeNo || "Auto-generated"}
+                    />
+                    <ReviewItem label="SSS No." value={values.sssNo || "Not provided"} />
+                    <ReviewItem
+                      label="PhilHealth No."
+                      value={values.philhealthNo || "Not provided"}
+                    />
+                    <ReviewItem label="TIN No." value={values.tinNo || "Not provided"} />
+                    <ReviewItem
+                      label="Pag-IBIG No."
+                      value={values.pagibigNo || "Not provided"}
+                    />
+                    <ReviewItem
+                      label="Login account"
+                      value={values.createAccount ? `Enabled · ${values.email}` : "Not created"}
                     />
                   </div>
                   <div className="rounded-lg border border-amber-500/25 bg-amber-500/8 p-3 text-[0.6875rem] text-amber-800 dark:text-amber-300">

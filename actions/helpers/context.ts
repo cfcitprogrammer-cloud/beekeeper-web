@@ -43,9 +43,20 @@ export function failure(error: string): ActionResult<never> {
   return { success: false, error }
 }
 
+/**
+ * Context returned once authentication and permission checks have passed, so
+ * callers can rely on the user and company identifiers being present.
+ */
+export type AuthorizedActionContext = ActionContext & {
+  userId: string
+  companyId: string
+}
+
 export async function getAuthorizedContext(
   permission: PermissionKey
-): Promise<{ context: ActionContext } | { error: ActionResult<never> }> {
+): Promise<
+  { context: AuthorizedActionContext } | { error: ActionResult<never> }
+> {
   const context = await getActionContext()
 
   if (!context.userId) {
@@ -66,5 +77,11 @@ export async function getAuthorizedContext(
     }
   }
 
-  return { context }
+  return {
+    context: {
+      ...context,
+      userId: context.userId,
+      companyId: context.companyId,
+    },
+  }
 }
