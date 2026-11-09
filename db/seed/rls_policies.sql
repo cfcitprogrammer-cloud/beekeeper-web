@@ -153,7 +153,7 @@ declare
     'shifts',
     'employee_schedules',
     'holidays',
-    'attendance',
+    'attendances',
     'leave_types',
     'leave_balances',
     'leave_requests',

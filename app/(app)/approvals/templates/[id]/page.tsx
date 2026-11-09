@@ -32,10 +32,11 @@ export default async function ApprovalTemplateConfigPage({
   const template = templatesResult.data.find((t) => t.id === id)
   if (!template) notFound()
 
-  const employees = employeesResult.data.map((e) => ({
-    id: e.user_id ?? e.id,
-    name: `${e.first_name} ${e.last_name}`,
-  })).filter((e) => e.id)
+  const employees = employeesResult.data.flatMap((employee) =>
+    employee.user_id
+      ? [{ id: employee.user_id, name: `${employee.first_name} ${employee.last_name}`.trim() }]
+      : []
+  )
 
   const roles = rolesResult.data.map((r) => ({ id: r.id, name: r.name }))
 

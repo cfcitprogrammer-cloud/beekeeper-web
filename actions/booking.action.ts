@@ -40,6 +40,16 @@ export async function deleteBooking(id: string): Promise<ActionResult<{ id: stri
 
   const { supabase, companyId } = authorized.context
 
+  // Close any in-flight approval so the inbox does not keep a request whose
+  // document is about to disappear.
+  await supabase
+    .from("approval_requests")
+    .update({ status: "cancelled", completed_at: new Date().toISOString() })
+    .eq("company_id", companyId)
+    .eq("document_type", "booking")
+    .eq("document_id", id)
+    .eq("status", "pending")
+
   const { error } = await supabase
     .from("bookings")
     .delete()
@@ -143,12 +153,31 @@ export async function updateBookingStatus(
 
   const { supabase } = context
 
+  // Submitting for approval must create the approval request and stage rows,
+  // otherwise the document sits in `pending_approval` with an empty inbox.
+  if (status === "pending_approval") {
+    const { error } = await supabase.rpc("submit_for_approval", {
+      p_document_type: "booking",
+      p_document_id: input.id,
+    })
+
+    if (error) {
+      console.error("[action:updateBookingStatus:submit]", error)
+      return failure(error.message)
+    }
+
+    revalidatePath("/bookings")
+    revalidatePath(`/bookings/${input.id}`)
+    revalidatePath("/approvals/inbox")
+    revalidatePath("/dashboard")
+
+    return { success: true, data: { id: input.id } }
+  }
+
   const { data, error } = await supabase
     .from("bookings")
     .update({
       status,
-      submitted_at:
-        status === "pending_approval" ? new Date().toISOString() : undefined,
       approved_at: status === "approved" ? new Date().toISOString() : undefined,
     })
     .eq("id", input.id)
@@ -160,6 +189,18 @@ export async function updateBookingStatus(
     console.error("[action:updateBookingStatus]", error)
     return failure(error.message)
   }
+
+  // Keep the approval runtime in sync when a booking is overridden directly
+  // (approved/rejected/cancelled) instead of through the inbox.
+  const requestStatus =
+    status === "approved" || status === "rejected" ? status : "cancelled"
+  await supabase
+    .from("approval_requests")
+    .update({ status: requestStatus, completed_at: new Date().toISOString() })
+    .eq("company_id", context.companyId)
+    .eq("document_type", "booking")
+    .eq("document_id", input.id)
+    .eq("status", "pending")
 
   revalidatePath("/bookings")
   revalidatePath(`/bookings/${input.id}`)

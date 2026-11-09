@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, Plus, ShieldCheck, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 
 import {
   addStageApprover,
@@ -14,8 +14,6 @@ import {
   removeTemplateOriginator,
   removeTemplateStage,
 } from "@/actions/approval-template-config.action"
-import { Modal } from "@/components/shared/modal"
-import { StatusBadge } from "@/components/shared/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,6 +42,14 @@ export function ApprovalTemplateConfigManager({
   const [saving, setSaving] = React.useState(false)
 
   const stageById = React.useMemo(() => new Map(stages.map((s) => [s.id, s])), [stages])
+  const employeeNames = React.useMemo(
+    () => new Map(employees.map((employee) => [employee.id, employee.name])),
+    [employees]
+  )
+  const roleNames = React.useMemo(
+    () => new Map(roles.map((role) => [role.id, role.name])),
+    [roles]
+  )
   const usedStageIds = React.useMemo(
     () => new Set(template.stages.map((ts) => ts.stage_id)),
     [template.stages]
@@ -225,7 +231,11 @@ export function ApprovalTemplateConfigManager({
                       <div className="flex flex-wrap gap-1">
                         {approvers.map((a) => (
                           <Badge key={a.id} variant="outline" className="gap-1 text-[0.625rem]">
-                            {a.user_id ? `User ${a.user_id.slice(0, 8)}` : a.role_id ? `Role ${a.role_id.slice(0, 8)}` : "—"}
+                            {a.user_id
+                              ? `User: ${employeeNames.get(a.user_id) ?? a.user_id.slice(0, 8)}`
+                              : a.role_id
+                                ? `Role: ${roleNames.get(a.role_id) ?? a.role_id.slice(0, 8)}`
+                                : "—"}
                             <button
                               type="button"
                               onClick={() => handleRemoveApprover(a.id)}

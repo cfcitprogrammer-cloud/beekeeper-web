@@ -52,7 +52,7 @@ export default async function ProductionPage() {
         />
       </div>
 
-      <ProductionManager pipelines={pipelines} usage={usageResult.data} />
+      <ProductionManager pipelines={pipelines} />
     </div>
   )
 }

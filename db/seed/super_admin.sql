@@ -59,6 +59,11 @@ declare
   v_workspace_id uuid;
   v_role_id      uuid;
   v_employee_id  uuid;
+
+  -- Default approval workflow (created only when the company has none).
+  v_approval_stage_id     uuid := '66666666-6666-4666-8666-666666666666';
+  v_booking_template_id   uuid := '77777777-7777-4777-8777-777777777777';
+  v_outlet_template_id    uuid := '88888888-8888-4888-8888-888888888888';
 begin
   -- ==========================================================================
   -- 1. Auth user
@@ -409,6 +414,81 @@ begin
         employment_type = excluded.employment_type,
         status = excluded.status,
         updated_at = now();
+
+  -- ==========================================================================
+  -- 10. Default approval workflow (only when the company has none)
+  -- ==========================================================================
+  -- One single-stage workflow that the Super Admin role can decide. Without a
+  -- template, submissions auto-approve; this makes the inbox testable on a
+  -- fresh install. Existing companies with templates are left untouched.
+  if not exists (
+    select 1 from public.approval_templates where company_id = v_company_id
+  ) then
+    insert into public.approval_stages (
+      id, company_id, name, description, required_approvals, is_active
+    )
+    values (
+      v_approval_stage_id,
+      v_company_id,
+      'Manager approval',
+      'Single-stage review performed by the Super Admin role.',
+      1,
+      true
+    )
+    on conflict (id) do update
+      set company_id = excluded.company_id,
+          name = excluded.name,
+          description = excluded.description,
+          required_approvals = excluded.required_approvals,
+          is_active = true,
+          updated_at = now();
+
+    insert into public.approval_stage_approvers (company_id, stage_id, role_id)
+    select v_company_id, v_approval_stage_id, v_role_id
+     where not exists (
+       select 1 from public.approval_stage_approvers
+        where stage_id = v_approval_stage_id and role_id = v_role_id
+     );
+
+    insert into public.approval_templates (
+      id, company_id, name, description, document_type, workspace_id, is_active
+    )
+    values
+      (
+        v_booking_template_id,
+        v_company_id,
+        'Booking approval',
+        'Routes booking submissions through manager approval.',
+        'booking',
+        null,
+        true
+      ),
+      (
+        v_outlet_template_id,
+        v_company_id,
+        'Outlet onboarding approval',
+        'Routes outlet onboarding through manager approval.',
+        'outlet',
+        null,
+        true
+      )
+    on conflict (id) do update
+      set company_id = excluded.company_id,
+          name = excluded.name,
+          description = excluded.description,
+          document_type = excluded.document_type,
+          workspace_id = excluded.workspace_id,
+          is_active = true,
+          updated_at = now();
+
+    insert into public.approval_template_stages (
+      company_id, template_id, stage_id, seq
+    )
+    values
+      (v_company_id, v_booking_template_id, v_approval_stage_id, 1),
+      (v_company_id, v_outlet_template_id, v_approval_stage_id, 1)
+    on conflict do nothing;
+  end if;
 
   raise notice 'Seed complete — Super Admin: % (user id %)', v_email, v_user_id;
 end $$;

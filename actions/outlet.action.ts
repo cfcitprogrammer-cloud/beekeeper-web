@@ -113,6 +113,14 @@ export async function deleteOutlet(id: string): Promise<ActionResult<{ id: strin
 
   const { supabase, companyId, workspaceId } = authorized.context
 
+  await supabase
+    .from("approval_requests")
+    .update({ status: "cancelled", completed_at: new Date().toISOString() })
+    .eq("company_id", companyId)
+    .eq("document_type", "outlet")
+    .eq("document_id", id)
+    .eq("status", "pending")
+
   const { error } = await supabase
     .from("outlets")
     .delete()
@@ -180,8 +188,7 @@ export async function createOutlet(
       is_active: input.isActive ?? false,
       is_distributor: input.isDistributor ?? false,
       distributor_id: input.isDistributor ? null : (input.distributorId ?? null),
-      status: "pending_approval",
-      submitted_at: new Date().toISOString(),
+      status: "draft",
       created_by: userId,
     })
     .select("id")
@@ -190,6 +197,20 @@ export async function createOutlet(
   if (error) {
     console.error("[action:createOutlet]", error)
     return failure(error.message)
+  }
+
+  // Create the approval request (and inbox stages) for the new outlet.
+  const { error: submitError } = await supabase.rpc("submit_for_approval", {
+    p_document_type: "outlet",
+    p_document_id: data.id,
+  })
+
+  if (submitError) {
+    console.error("[action:createOutlet:submit]", submitError)
+    // Roll back the freshly inserted draft so a retry does not collide with
+    // the unique (company_id, code) constraint.
+    await supabase.from("outlets").delete().eq("id", data.id)
+    return failure(submitError.message)
   }
 
   await logActivity(supabase, { companyId, workspaceId, userId }, authorized.context.employee?.id ?? null, {

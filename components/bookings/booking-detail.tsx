@@ -162,21 +162,10 @@ export function BookingDetailView({ booking }: { booking: BookingDetail }) {
             </Button>
           )}
           {canDecide && (
-            <>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => updateStatus("REJECTED")}
-                disabled={saving}
-              >
-                <X />
-                Reject
-              </Button>
-              <Button size="sm" onClick={() => updateStatus("APPROVED")} disabled={saving}>
-                <Check />
-                Approve
-              </Button>
-            </>
+            <Button size="sm" render={<Link href="/approvals/inbox" />}>
+              <ClipboardCheck />
+              Review in approvals inbox
+            </Button>
           )}
           {["DRAFT", "PENDING_APPROVAL", "APPROVED"].includes(status) && (
             <Button

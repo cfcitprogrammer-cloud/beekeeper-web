@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/server"
 import type {
   ApprovalHistoryItem,
   ApprovalStage,
+  ApprovalStageApprover,
   ApprovalTemplateWithConfig,
   AttendanceDaily,
   AttendanceWithEmployee,
@@ -384,6 +385,20 @@ export async function getDepartments(): Promise<QueryResult<Department[]>> {
   return empty((data as Department[] | null) ?? [])
 }
 
+export async function getDepartment(
+  id: string
+): Promise<QueryResult<Department | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("departments")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("department", error)
+  return empty((data as Department | null) ?? null)
+}
+
 export async function getRoles(): Promise<QueryResult<{ id: string; name: string }[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -407,6 +422,20 @@ export async function getPositions(): Promise<QueryResult<Position[]>> {
   return empty((data as Position[] | null) ?? [])
 }
 
+export async function getPosition(
+  id: string
+): Promise<QueryResult<Position | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("positions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("position", error)
+  return empty((data as Position | null) ?? null)
+}
+
 /* -------------------------------------------------------------------------- */
 /*                          Scheduling & Attendance                           */
 /* -------------------------------------------------------------------------- */
@@ -422,6 +451,18 @@ export async function getShifts(): Promise<QueryResult<Shift[]>> {
   return empty((data as Shift[] | null) ?? [])
 }
 
+export async function getShift(id: string): Promise<QueryResult<Shift | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("shift", error)
+  return empty((data as Shift | null) ?? null)
+}
+
 export async function getEmployeeSchedules(): Promise<QueryResult<EmployeeSchedule[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -431,6 +472,20 @@ export async function getEmployeeSchedules(): Promise<QueryResult<EmployeeSchedu
 
   logError("employee-schedules", error)
   return empty((data as EmployeeSchedule[] | null) ?? [])
+}
+
+export async function getEmployeeSchedule(
+  id: string
+): Promise<QueryResult<EmployeeSchedule | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("employee_schedules")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("employee-schedule", error)
+  return empty((data as EmployeeSchedule | null) ?? null)
 }
 
 type AttendanceEventRow = {
@@ -633,6 +688,33 @@ export async function getLeaveTypes(): Promise<QueryResult<LeaveType[]>> {
   return empty(((data as LeaveTypeRow[] | null) ?? []).map(mapLeaveType))
 }
 
+export async function getLeaveType(
+  id: string
+): Promise<QueryResult<LeaveType | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("leave_types")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("leave-type", error)
+  if (error || !data) return empty(null)
+  return empty(mapLeaveType(data as LeaveTypeRow))
+}
+
+function mapHolidayRow(r: { id: string; company_id: string; workspace_id: string | null; holiday_date: string; name: string; type: string; created_at: string }): Holiday {
+  return {
+    id: r.id,
+    company_id: r.company_id,
+    workspace_id: r.workspace_id,
+    holiday_date: r.holiday_date,
+    name: r.name,
+    type: r.type === "regular" ? "REGULAR" : r.type === "special" ? "SPECIAL" : "LOCAL",
+    created_at: r.created_at,
+  }
+}
+
 export async function getHolidays(): Promise<QueryResult<Holiday[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -642,16 +724,20 @@ export async function getHolidays(): Promise<QueryResult<Holiday[]>> {
 
   logError("holidays", error)
   const rows = (data as { id: string; company_id: string; workspace_id: string | null; holiday_date: string; name: string; type: string; created_at: string }[] | null) ?? []
-  const mapped: Holiday[] = rows.map((r) => ({
-    id: r.id,
-    company_id: r.company_id,
-    workspace_id: r.workspace_id,
-    holiday_date: r.holiday_date,
-    name: r.name,
-    type: r.type === "regular" ? "REGULAR" : r.type === "special" ? "SPECIAL" : "LOCAL",
-    created_at: r.created_at,
-  }))
-  return empty(mapped)
+  return empty(rows.map(mapHolidayRow))
+}
+
+export async function getHoliday(id: string): Promise<QueryResult<Holiday | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("holidays")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("holiday", error)
+  if (error || !data) return empty(null)
+  return empty(mapHolidayRow(data as { id: string; company_id: string; workspace_id: string | null; holiday_date: string; name: string; type: string; created_at: string }))
 }
 
 type LeaveRequestRow = {
@@ -812,6 +898,20 @@ export async function getWorkspaceLocations(): Promise<QueryResult<WorkspaceLoca
   return empty((data as WorkspaceLocation[] | null) ?? [])
 }
 
+export async function getWorkspaceLocation(
+  id: string
+): Promise<QueryResult<WorkspaceLocation | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("workspace_locations")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("workspace-location", error)
+  return empty((data as WorkspaceLocation | null) ?? null)
+}
+
 export async function getWorkspaces(): Promise<QueryResult<Workspace[]>> {
   const supabase = await createClient()
   const access = await getAccessContext()
@@ -849,6 +949,27 @@ export async function getOutlets(): Promise<
   )
 }
 
+export async function getOutlet(
+  id: string
+): Promise<QueryResult<OutletWithRelations | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("outlets")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("outlet", error)
+  if (error || !data) return empty(null)
+
+  const row = data as Record<string, unknown>
+  return empty({
+    ...(row as unknown as OutletWithRelations),
+    status: mapOutletStatus(row),
+    approval_status: mapDocumentApprovalStatus(row.status),
+  })
+}
+
 export async function getSkuCategories(): Promise<QueryResult<SkuCategory[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -860,6 +981,20 @@ export async function getSkuCategories(): Promise<QueryResult<SkuCategory[]>> {
   return empty((data as SkuCategory[] | null) ?? [])
 }
 
+export async function getSkuCategory(
+  id: string
+): Promise<QueryResult<SkuCategory | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("sku_categories")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("sku-category", error)
+  return empty((data as SkuCategory | null) ?? null)
+}
+
 export async function getSkus(): Promise<QueryResult<SkuWithCategory[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -869,6 +1004,20 @@ export async function getSkus(): Promise<QueryResult<SkuWithCategory[]>> {
 
   logError("skus", error)
   return empty((data as SkuWithCategory[] | null) ?? [])
+}
+
+export async function getSku(
+  id: string
+): Promise<QueryResult<SkuWithCategory | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("skus")
+    .select("*, category:sku_categories(id,name)")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("sku", error)
+  return empty((data as SkuWithCategory | null) ?? null)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1184,4 +1333,133 @@ export async function getApprovalStages(): Promise<QueryResult<ApprovalStage[]>>
 
   logError("approval-stages", error)
   return empty((data as ApprovalStage[] | null) ?? [])
+}
+
+export async function getApprovalStage(
+  id: string
+): Promise<QueryResult<ApprovalStage | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("approval_stages")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("approval-stage", error)
+  return empty((data as ApprovalStage | null) ?? null)
+}
+
+export async function getApprovalStageApprovers(
+  stageId: string
+): Promise<QueryResult<ApprovalStageApprover[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("approval_stage_approvers")
+    .select("*")
+    .eq("stage_id", stageId)
+    .order("created_at")
+
+  logError("approval-stage-approvers", error)
+  return empty((data as ApprovalStageApprover[] | null) ?? [])
+}
+
+export async function getPendingApproval(
+  requestStageId: string
+): Promise<QueryResult<MyPendingApproval | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("my_pending_approvals")
+    .select("*")
+    .eq("request_stage_id", requestStageId)
+    .maybeSingle()
+
+  logError("pending-approval", error)
+  if (error || !data) return empty(null)
+
+  const row = data as PendingApprovalRow
+  const names = await getEmployeeNamesByUserId([row.requested_by])
+  return empty({
+    request_stage_id: row.request_stage_id,
+    request_id: row.request_id,
+    company_id: row.company_id,
+    workspace_id: row.workspace_id,
+    document_type: mapDocumentType(row.document_type),
+    document_id: row.document_id,
+    document_no:
+      snapshotString(row.document_snapshot, [
+        "booking_no",
+        "document_no",
+        "code",
+        "name",
+      ]) ?? row.document_id.slice(0, 8).toUpperCase(),
+    title:
+      snapshotString(row.document_snapshot, ["title", "name", "booking_no"]) ??
+      row.template_name,
+    amount: snapshotNumber(row.document_snapshot, [
+      "total",
+      "amount",
+      "total_amount",
+      "subtotal",
+    ]),
+    requested_by: row.requested_by,
+    requested_by_name: names.get(row.requested_by) ?? "Workspace user",
+    stage_name: row.stage_name,
+    stage_sequence: row.seq,
+    status: "PENDING",
+    submitted_at: row.requested_at,
+  })
+}
+
+export async function getLeaveRequest(
+  id: string
+): Promise<QueryResult<LeaveRequestWithRelations | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("leave_requests")
+    .select(
+      "*, employee:employees(id,employee_no,first_name,last_name,avatar_path,department_id,department:departments(name)), leave_type:leave_types(*)"
+    )
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("leave-request", error)
+  if (error || !data) return empty(null)
+
+  const row = data as LeaveRequestRow
+  if (!row.employee || !row.leave_type) return empty(null)
+  return empty({
+    id: row.id,
+    company_id: row.company_id,
+    workspace_id: row.workspace_id,
+    employee_id: row.employee_id,
+    leave_type_id: row.leave_type_id,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    days_count: row.days,
+    is_half_day: row.is_half_day,
+    reason: row.reason,
+    status: mapApprovalStatus(row.status),
+    reviewed_by: row.reviewed_by,
+    reviewed_at: row.reviewed_at,
+    review_notes: row.review_note,
+    attachment_url: row.attachment_path,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    employee: {
+      id: row.employee.id,
+      employee_no: row.employee.employee_no,
+      first_name: row.employee.first_name,
+      last_name: row.employee.last_name,
+      avatar_path: row.employee.avatar_path,
+      department_id: row.employee.department_id,
+    },
+    leave_type: {
+      id: row.leave_type.id,
+      name: row.leave_type.name,
+      code: row.leave_type.code,
+      color: leaveColor(`${row.leave_type.name}:${row.leave_type.code}`),
+      is_paid: row.leave_type.is_paid,
+    },
+    department_name: row.employee.department?.name ?? null,
+  })
 }

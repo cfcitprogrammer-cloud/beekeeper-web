@@ -442,39 +442,46 @@ export async function importOutlets(
       isActiveCell === ""
         ? status === "approved"
         : ["true", "1", "yes", "y"].includes(isActiveCell)
-    const { error } = await supabase.from("outlets").insert({
-      company_id: companyId,
-      workspace_id: workspaceId,
-      code,
-      name,
-      description: cell(row, map, "description") || null,
-      address: cell(row, map, "address") || null,
-      region: cell(row, map, "region") || null,
-      province: cell(row, map, "province") || null,
-      city: cell(row, map, "city") || null,
-      barangay: cell(row, map, "barangay") || null,
-      zip_code: cell(row, map, "zip_code") || null,
-      is_distributor: ["true", "1", "yes", "y"].includes(
-        cell(row, map, "is_distributor").toLowerCase()
-      ),
-      distributor_id: ["true", "1", "yes", "y"].includes(
-        cell(row, map, "is_distributor").toLowerCase()
-      )
-        ? null
-        : (distributorMap.get(cell(row, map, "distributor_code").toUpperCase()) ??
-          null),
-      contact_person: cell(row, map, "contact_person") || null,
-      phone: cell(row, map, "phone") || null,
-      email: cell(row, map, "email") || null,
-      latitude,
-      longitude,
-      geofence_radius_m: radius,
-      is_active: isActive,
-      status,
-      submitted_at: status === "pending_approval" ? new Date().toISOString() : null,
-      approved_at: status === "approved" ? new Date().toISOString() : null,
-      created_by: userId,
-    })
+    // Insert as `draft` and let the approval engine move it to
+    // `pending_approval`; a bare `pending_approval` insert would leave the
+    // document with no approval request (an empty inbox).
+    const { data: inserted, error } = await supabase
+      .from("outlets")
+      .insert({
+        company_id: companyId,
+        workspace_id: workspaceId,
+        code,
+        name,
+        description: cell(row, map, "description") || null,
+        address: cell(row, map, "address") || null,
+        region: cell(row, map, "region") || null,
+        province: cell(row, map, "province") || null,
+        city: cell(row, map, "city") || null,
+        barangay: cell(row, map, "barangay") || null,
+        zip_code: cell(row, map, "zip_code") || null,
+        is_distributor: ["true", "1", "yes", "y"].includes(
+          cell(row, map, "is_distributor").toLowerCase()
+        ),
+        distributor_id: ["true", "1", "yes", "y"].includes(
+          cell(row, map, "is_distributor").toLowerCase()
+        )
+          ? null
+          : (distributorMap.get(cell(row, map, "distributor_code").toUpperCase()) ??
+            null),
+        contact_person: cell(row, map, "contact_person") || null,
+        phone: cell(row, map, "phone") || null,
+        email: cell(row, map, "email") || null,
+        latitude,
+        longitude,
+        geofence_radius_m: radius,
+        is_active: status === "approved" ? isActive : false,
+        status: status === "pending_approval" ? "draft" : status,
+        submitted_at: null,
+        approved_at: status === "approved" ? new Date().toISOString() : null,
+        created_by: userId,
+      })
+      .select("id")
+      .single()
 
     if (error) {
       errors.push({
@@ -483,6 +490,22 @@ export async function importOutlets(
       })
       skipped += 1
       continue
+    }
+
+    if (status === "pending_approval") {
+      const { error: submitError } = await supabase.rpc("submit_for_approval", {
+        p_document_type: "outlet",
+        p_document_id: inserted.id,
+      })
+
+      if (submitError) {
+        // The draft stays behind; the row is reported so the operator can
+        // resubmit it from the outlet page.
+        errors.push({
+          row: rowNumber,
+          message: `Imported as draft but could not submit for approval: ${submitError.message}`,
+        })
+      }
     }
 
     imported += 1
