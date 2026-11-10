@@ -19,7 +19,7 @@ export default async function ExpensePlansPage() {
         description="Dated plans that group expense items for an employee. Items can also exist without a plan."
         icon={Wallet}
       />
-      <ExpensePlansManager plans={result.data} />
+      <ExpensePlansManager plans={result.data ?? []} />
     </div>
   )
 }

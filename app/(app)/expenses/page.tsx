@@ -22,9 +22,9 @@ export default async function ExpensesPage() {
     getExpenseCategories(),
   ])
 
-  const plans = plansResult.data
-  const expenses = expensesResult.data
-  const categories = categoriesResult.data
+  const plans = plansResult.data ?? []
+  const expenses = expensesResult.data ?? []
+  const categories = categoriesResult.data ?? []
   const total = expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0)
   const pending = expenses.filter((expense) => expense.status === "pending")
   const reimbursable = expenses.filter((expense) => expense.is_reimbursable)

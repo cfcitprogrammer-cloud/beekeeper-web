@@ -12,7 +12,7 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
 import type { OutletWithRelations } from "@/types/database"
 
-export function CheckInForm({ outlets }: { outlets: OutletWithRelations[] }) {
+export function CheckInForm({ outlets = [] }: { outlets: OutletWithRelations[] }) {
   const router = useRouter()
   const [saving, setSaving] = React.useState(false)
   const activeOutlets = outlets.filter((o) => o.status === "ACTIVE")

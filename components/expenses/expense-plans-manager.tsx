@@ -13,7 +13,7 @@ import { toast } from "@/components/ui/toast"
 import { formatCurrency, formatDate } from "@/lib/format"
 import type { ExpensePlanWithRelations } from "@/lib/data/operations"
 
-export function ExpensePlansManager({ plans }: { plans: ExpensePlanWithRelations[] }) {
+export function ExpensePlansManager({ plans = [] }: { plans: ExpensePlanWithRelations[] }) {
   const router = useRouter()
 
   async function removePlan(plan: ExpensePlanWithRelations) {

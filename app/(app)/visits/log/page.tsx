@@ -19,7 +19,7 @@ export default async function VisitLogPage() {
         description="Every recorded visit. Visits are planned when the employee has a plan covering the visit date."
         icon={Route}
       />
-      <VisitLog visits={result.data} />
+      <VisitLog visits={result.data ?? []} />
     </div>
   )
 }

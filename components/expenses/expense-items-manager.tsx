@@ -19,8 +19,8 @@ import {
 import type { ExpenseWithRelations } from "@/lib/data/operations"
 
 export function ExpenseItemsManager({
-  expenses,
-  plans,
+  expenses = [],
+  plans = [],
 }: {
   expenses: ExpenseWithRelations[]
   plans: Pick<ExpensePlan, "id" | "title">[]

@@ -19,7 +19,7 @@ export default async function VisitPlansPage() {
         description="A visit plan reserves a date range for an employee. It has no target outlets; any outlet can be visited."
         icon={CalendarClock}
       />
-      <VisitPlansManager plans={result.data} />
+      <VisitPlansManager plans={result.data ?? []} />
     </div>
   )
 }

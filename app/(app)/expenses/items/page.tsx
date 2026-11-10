@@ -14,7 +14,7 @@ export default async function ExpenseItemsPage() {
     getExpensePlans(),
   ])
 
-  const plans = plansResult.data.map((plan) => ({ id: plan.id, title: plan.title }))
+  const plans = (plansResult.data ?? []).map((plan) => ({ id: plan.id, title: plan.title }))
 
   return (
     <div className="space-y-5">
@@ -24,7 +24,7 @@ export default async function ExpenseItemsPage() {
         description="Every expense item, including standalone items that are not attached to a plan."
         icon={Receipt}
       />
-      <ExpenseItemsManager expenses={expensesResult.data} plans={plans} />
+      <ExpenseItemsManager expenses={expensesResult.data ?? []} plans={plans} />
     </div>
   )
 }

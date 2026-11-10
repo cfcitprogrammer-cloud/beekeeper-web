@@ -36,8 +36,8 @@ import type { ExpensePlanWithRelations, ExpenseWithRelations } from "@/lib/data/
 const today = () => new Date().toISOString().slice(0, 10)
 
 export function ExpenseForm({
-  plans,
-  categories,
+  plans = [],
+  categories = [],
   expense,
   initialPlanId,
 }: {

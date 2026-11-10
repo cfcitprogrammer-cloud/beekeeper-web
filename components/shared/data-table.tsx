@@ -77,7 +77,7 @@ const hideClasses = {
 } as const
 
 export function DataTable<T>({
-  data,
+  data = [],
   columns,
   getRowId,
   searchable,

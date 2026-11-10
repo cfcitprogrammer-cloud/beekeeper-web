@@ -13,7 +13,7 @@ import { toast } from "@/components/ui/toast"
 import { formatDate } from "@/lib/format"
 import type { VisitPlanWithRelations } from "@/lib/data/operations"
 
-export function VisitPlansManager({ plans }: { plans: VisitPlanWithRelations[] }) {
+export function VisitPlansManager({ plans = [] }: { plans: VisitPlanWithRelations[] }) {
   const router = useRouter()
 
   async function removePlan(plan: VisitPlanWithRelations) {

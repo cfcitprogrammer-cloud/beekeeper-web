@@ -12,7 +12,7 @@ import { toast } from "@/components/ui/toast"
 import type { ExpenseCategory } from "@/types/database"
 
 export function ExpenseCategoriesManager({
-  categories,
+  categories = [],
 }: {
   categories: ExpenseCategory[]
 }) {

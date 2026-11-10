@@ -25,7 +25,7 @@ export default async function NewExpenseItemPage({
   ])
 
   const plans = access.employee
-    ? plansResult.data.filter(
+    ? (plansResult.data ?? []).filter(
         (plan) => plan.employee_id === access.employee?.id
       )
     : []
@@ -43,7 +43,7 @@ export default async function NewExpenseItemPage({
       />
       <ExpenseForm
         plans={plans}
-        categories={categoriesResult.data}
+        categories={categoriesResult.data ?? []}
         initialPlanId={initialPlanId}
       />
     </div>

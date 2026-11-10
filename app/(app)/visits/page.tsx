@@ -23,8 +23,8 @@ export default async function VisitsPage() {
     getVisits(),
   ])
 
-  const plans = plansResult.data
-  const visits = visitsResult.data
+  const plans = plansResult.data ?? []
+  const visits = visitsResult.data ?? []
   const todayKey = new Date().toISOString().slice(0, 10)
   const todayVisits = visits.filter((visit) => visit.check_in_at.startsWith(todayKey))
   const unplanned = visits.filter((visit) => !visit.is_planned)

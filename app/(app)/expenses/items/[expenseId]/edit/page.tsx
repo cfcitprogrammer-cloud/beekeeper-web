@@ -27,7 +27,7 @@ export default async function EditExpenseItemPage({
 
   if (!expenseResult.data) notFound()
 
-  const plans = plansResult.data.filter(
+  const plans = (plansResult.data ?? []).filter(
     (plan) => plan.employee_id === expenseResult.data?.employee_id
   )
 
@@ -42,7 +42,7 @@ export default async function EditExpenseItemPage({
       <ExpenseForm
         expense={expenseResult.data}
         plans={plans}
-        categories={categoriesResult.data}
+        categories={categoriesResult.data ?? []}
       />
     </div>
   )

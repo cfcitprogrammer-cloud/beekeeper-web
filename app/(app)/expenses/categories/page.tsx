@@ -19,7 +19,7 @@ export default async function ExpenseCategoriesPage() {
         description="Master data used to classify expense items. Categories are fully configurable."
         icon={Tags}
       />
-      <ExpenseCategoriesManager categories={result.data} />
+      <ExpenseCategoriesManager categories={result.data ?? []} />
     </div>
   )
 }

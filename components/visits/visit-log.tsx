@@ -21,7 +21,7 @@ import { formatDateTime, humanize } from "@/lib/format"
 import { VISIT_STATUSES } from "@/types/database"
 import type { VisitWithRelations } from "@/lib/data/operations"
 
-export function VisitLog({ visits }: { visits: VisitWithRelations[] }) {
+export function VisitLog({ visits = [] }: { visits: VisitWithRelations[] }) {
   const router = useRouter()
   const [status, setStatus] = React.useState("all")
   const [classification, setClassification] = React.useState("all")
