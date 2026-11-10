@@ -79,7 +79,9 @@ export async function updateOutlet(
       geofence_radius_m: input.geofenceRadiusM ?? 150,
       ...(input.isActive === undefined ? {} : { is_active: input.isActive }),
       is_distributor: input.isDistributor ?? false,
-      distributor_id: input.isDistributor ? null : (input.distributorId ?? null),
+      distributor_id: input.isDistributor
+        ? null
+        : (input.distributorId ?? null),
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
@@ -91,12 +93,17 @@ export async function updateOutlet(
     return failure(error.message)
   }
 
-  await logActivity(supabase, { companyId, workspaceId, userId: authorized.context.userId }, authorized.context.employee?.id ?? null, {
-    action: "update",
-    entityType: "outlet",
-    entityId: input.id,
-    summary: `Updated outlet ${input.name.trim()}`,
-  })
+  await logActivity(
+    supabase,
+    { companyId, workspaceId, userId: authorized.context.userId },
+    authorized.context.employee?.id ?? null,
+    {
+      action: "update",
+      entityType: "outlet",
+      entityId: input.id,
+      summary: `Updated outlet ${input.name.trim()}`,
+    }
+  )
 
   revalidatePath("/outlets")
   revalidatePath("/outlets/assignments")
@@ -105,7 +112,9 @@ export async function updateOutlet(
   return { success: true, data }
 }
 
-export async function deleteOutlet(id: string): Promise<ActionResult<{ id: string }>> {
+export async function deleteOutlet(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
   if (!id) return failure("Outlet id is required.")
 
   const authorized = await getAuthorizedContext(PERMISSIONS.OUTLETS_DELETE)
@@ -132,12 +141,17 @@ export async function deleteOutlet(id: string): Promise<ActionResult<{ id: strin
     return failure(error.message)
   }
 
-  await logActivity(supabase, { companyId, workspaceId, userId: authorized.context.userId }, authorized.context.employee?.id ?? null, {
-    action: "delete",
-    entityType: "outlet",
-    entityId: id,
-    summary: "Deleted an outlet",
-  })
+  await logActivity(
+    supabase,
+    { companyId, workspaceId, userId: authorized.context.userId },
+    authorized.context.employee?.id ?? null,
+    {
+      action: "delete",
+      entityType: "outlet",
+      entityId: id,
+      summary: "Deleted an outlet",
+    }
+  )
 
   revalidatePath("/outlets")
   revalidatePath("/outlets/assignments")
@@ -165,6 +179,9 @@ export async function createOutlet(
     )
   }
 
+  console.log("AAAAAAAAAAAAAAAAAAAAAAAAA")
+  console.log(input)
+
   const { data, error } = await supabase
     .from("outlets")
     .insert({
@@ -187,7 +204,9 @@ export async function createOutlet(
       geofence_radius_m: input.geofenceRadiusM ?? 150,
       is_active: input.isActive ?? false,
       is_distributor: input.isDistributor ?? false,
-      distributor_id: input.isDistributor ? null : (input.distributorId ?? null),
+      distributor_id: input.isDistributor
+        ? null
+        : (input.distributorId ?? null),
       status: "draft",
       created_by: userId,
     })
@@ -213,13 +232,21 @@ export async function createOutlet(
     return failure(submitError.message)
   }
 
-  await logActivity(supabase, { companyId, workspaceId, userId }, authorized.context.employee?.id ?? null, {
-    action: "create",
-    entityType: "outlet",
-    entityId: data.id,
-    summary: `Submitted outlet ${input.name.trim()} for onboarding`,
-    metadata: { latitude: input.latitude ?? 14.5995, longitude: input.longitude ?? 120.9842 },
-  })
+  await logActivity(
+    supabase,
+    { companyId, workspaceId, userId },
+    authorized.context.employee?.id ?? null,
+    {
+      action: "create",
+      entityType: "outlet",
+      entityId: data.id,
+      summary: `Submitted outlet ${input.name.trim()} for onboarding`,
+      metadata: {
+        latitude: input.latitude ?? 14.5995,
+        longitude: input.longitude ?? 120.9842,
+      },
+    }
+  )
 
   revalidatePath("/outlets")
   revalidatePath("/outlets/assignments")

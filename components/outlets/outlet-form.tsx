@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
+import { Slider } from "@/components/ui/slider"
 import { toast } from "@/components/ui/toast"
 // @ts-ignore
 import * as psgcModule from "psgc"
@@ -151,7 +152,9 @@ export function OutletForm({
     if (!result.success) {
       toast.add({
         type: "error",
-        title: editingId ? "Could not update outlet" : "Could not create outlet",
+        title: editingId
+          ? "Could not update outlet"
+          : "Could not create outlet",
         description: result.error,
       })
       return
@@ -171,7 +174,11 @@ export function OutletForm({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => router.push("/outlets")}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push("/outlets")}
+        >
           <ArrowLeft />
           Back to outlets
         </Button>
@@ -184,7 +191,9 @@ export function OutletForm({
             <Input
               id="outlet-name"
               value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, name: event.target.value })
+              }
               placeholder="Harbor Point Market"
             />
           </div>
@@ -193,7 +202,9 @@ export function OutletForm({
             <Input
               id="outlet-code"
               value={draft.code}
-              onChange={(event) => setDraft({ ...draft, code: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, code: event.target.value })
+              }
               placeholder="OUT-1015"
             />
           </div>
@@ -202,7 +213,9 @@ export function OutletForm({
             <Input
               id="outlet-address"
               value={draft.address}
-              onChange={(event) => setDraft({ ...draft, address: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, address: event.target.value })
+              }
               placeholder="Unit, street, barangay, city"
             />
           </div>
@@ -289,13 +302,18 @@ export function OutletForm({
             <NativeSelect
               id="outlet-barangay"
               value={draft.barangay}
-              onChange={(event) => setDraft({ ...draft, barangay: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, barangay: event.target.value })
+              }
               className="w-full"
               disabled={!draft.city}
             >
               <option value="">Select barangay</option>
               {locationBarangays.map((barangay: any) => (
-                <option key={barangay.code ?? barangay.name} value={barangay.name}>
+                <option
+                  key={barangay.code ?? barangay.name}
+                  value={barangay.name}
+                >
                   {barangay.name}
                 </option>
               ))}
@@ -306,7 +324,9 @@ export function OutletForm({
             <Input
               id="outlet-zip"
               value={draft.zip_code}
-              onChange={(event) => setDraft({ ...draft, zip_code: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, zip_code: event.target.value })
+              }
               placeholder="e.g. 1000"
             />
           </div>
@@ -336,7 +356,9 @@ export function OutletForm({
                   setDraft({
                     ...draft,
                     is_distributor: event.target.checked,
-                    distributor_id: event.target.checked ? "" : draft.distributor_id,
+                    distributor_id: event.target.checked
+                      ? ""
+                      : draft.distributor_id,
                   })
                 }
                 className="size-3.5 accent-primary"
@@ -382,7 +404,9 @@ export function OutletForm({
             <Input
               id="outlet-phone"
               value={draft.phone}
-              onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, phone: event.target.value })
+              }
               placeholder="+63 917 000 0000"
             />
           </div>
@@ -392,21 +416,40 @@ export function OutletForm({
               id="outlet-email"
               type="email"
               value={draft.email}
-              onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, email: event.target.value })
+              }
               placeholder="manager@outlet.ph"
             />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="outlet-radius">Geofence radius (m)</Label>
-            <Input
-              id="outlet-radius"
-              type="number"
-              min={25}
-              value={draft.geofence_radius_m}
-              onChange={(event) =>
-                setDraft({ ...draft, geofence_radius_m: event.target.value })
-              }
-            />
+            <div className="space-y-2">
+              <Slider
+                aria-label="Geofence radius"
+                min={25}
+                max={2000}
+                step={5}
+                value={[Number(draft.geofence_radius_m) || 150]}
+                onValueChange={(value) => {
+                  const next = Array.isArray(value) ? value[0] : value
+                  setDraft({ ...draft, geofence_radius_m: String(next ?? 150) })
+                }}
+              />
+              <Input
+                id="outlet-radius"
+                type="number"
+                min={25}
+                max={2000}
+                value={draft.geofence_radius_m}
+                onChange={(event) =>
+                  setDraft({ ...draft, geofence_radius_m: event.target.value })
+                }
+              />
+            </div>
+            <p className="text-[0.625rem] text-muted-foreground">
+              Adjust the circular geofence around the outlet pin (25–2000 m).
+            </p>
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Map location</Label>
@@ -414,6 +457,7 @@ export function OutletForm({
               key={editingId ?? "new"}
               latitude={draft.latitude}
               longitude={draft.longitude}
+              radiusM={Number(draft.geofence_radius_m) || 150}
               onChange={(latitude, longitude) =>
                 setDraft({ ...draft, latitude, longitude })
               }
@@ -422,7 +466,11 @@ export function OutletForm({
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t pt-4">
-          <Button variant="outline" onClick={() => router.push("/outlets")} disabled={saving}>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/outlets")}
+            disabled={saving}
+          >
             Cancel
           </Button>
           <Button onClick={saveOutletHandler} disabled={saving}>
