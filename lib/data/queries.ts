@@ -342,6 +342,68 @@ export async function getEmployees(): Promise<
   )
 }
 
+const ASSIGNABLE_EMPLOYEE_STATUSES = ["active", "probation", "on_leave"]
+const ASSIGNABLE_EMPLOYEE_SELECT =
+  "*, department:departments(id,name,code), position:positions(id,title), manager:employees!manager_id(id,first_name,last_name)"
+
+/**
+ * Only the first few employees are loaded for pickers. Callers must search for
+ * the rest so large employee directories are never shipped to the client.
+ */
+export async function getAssignableEmployees(
+  limit = 5
+): Promise<QueryResult<EmployeeWithRelations[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("employees")
+    .select(ASSIGNABLE_EMPLOYEE_SELECT)
+    .in("status", ASSIGNABLE_EMPLOYEE_STATUSES)
+    .order("last_name")
+    .limit(Math.max(1, limit))
+
+  logError("assignable-employees", error)
+  if (error || !data) return empty([])
+
+  return empty(
+    (data as Record<string, unknown>[]).map((row) => mapEmployee(row))
+  )
+}
+
+export async function searchAssignableEmployees(
+  term: string,
+  limit = 20
+): Promise<QueryResult<EmployeeWithRelations[]>> {
+  const supabase = await createClient()
+  const cleaned = term.trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ")
+  let query = supabase
+    .from("employees")
+    .select(ASSIGNABLE_EMPLOYEE_SELECT)
+    .in("status", ASSIGNABLE_EMPLOYEE_STATUSES)
+    .order("last_name")
+    .limit(Math.max(1, limit))
+
+  if (cleaned) {
+    const pattern = `%${cleaned}%`
+    query = query.or(
+      [
+        `first_name.ilike.${pattern}`,
+        `last_name.ilike.${pattern}`,
+        `employee_no.ilike.${pattern}`,
+        `email.ilike.${pattern}`,
+      ].join(",")
+    )
+  }
+
+  const { data, error } = await query
+
+  logError("search-assignable-employees", error)
+  if (error || !data) return empty([])
+
+  return empty(
+    (data as Record<string, unknown>[]).map((row) => mapEmployee(row))
+  )
+}
+
 export async function getEmployee(
   id: string
 ): Promise<QueryResult<EmployeeWithRelations | null>> {

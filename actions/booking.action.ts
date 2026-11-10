@@ -102,7 +102,6 @@ export async function createBooking(
       booking_no: bookingNo,
       booking_date: input.bookingDate,
       notes: input.notes?.trim() || null,
-      status: "draft",
       line_count: 0,
       subtotal: 0,
       discount_total: 0,

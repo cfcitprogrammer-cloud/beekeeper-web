@@ -207,7 +207,6 @@ export async function createOutlet(
       distributor_id: input.isDistributor
         ? null
         : (input.distributorId ?? null),
-      status: "draft",
       created_by: userId,
     })
     .select("id")

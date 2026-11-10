@@ -34,11 +34,20 @@ function dateError(startDate: string, endDate: string) {
   return null
 }
 
+function revalidateExpensePages() {
+  revalidatePath("/expenses")
+  revalidatePath("/expenses/items")
+  revalidatePath("/expenses/plans")
+  revalidatePath("/feed")
+}
+
 async function syncPlanTotal(
   supabase: ActionContext["supabase"],
   companyId: string,
-  planId: string
+  planId: string | null
 ) {
+  if (!planId) return
+
   const { data, error } = await supabase
     .from("expenses")
     .select("amount")
@@ -64,8 +73,31 @@ async function syncPlanTotal(
   if (updateError) console.error("[action:syncPlanTotal:update]", updateError)
 }
 
+async function resolveCategory(
+  supabase: ActionContext["supabase"],
+  companyId: string,
+  categoryId?: string
+): Promise<
+  | { categoryId: string; name: string }
+  | { categoryId: null; name: null }
+  | { error: string }
+> {
+  if (!categoryId) return { categoryId: null, name: null }
+
+  const { data, error } = await supabase
+    .from("expense_categories")
+    .select("id, name")
+    .eq("id", categoryId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (error) return { error: error.message }
+  if (!data) return { error: "Expense category not found in this company." }
+
+  return { categoryId: data.id, name: data.name }
+}
+
 export type CreateExpensePlanInput = {
-  employeeId: string
   title: string
   description?: string
   startDate: string
@@ -77,7 +109,6 @@ export type CreateExpensePlanInput = {
 export async function createExpensePlan(
   input: CreateExpensePlanInput
 ): Promise<ActionResult<{ id: string }>> {
-  if (!input.employeeId) return failure("Select an employee.")
   if (!input.title.trim()) return failure("A plan title is required.")
   const rangeError = dateError(input.startDate, input.endDate)
   if (rangeError) return failure(rangeError)
@@ -85,29 +116,27 @@ export async function createExpensePlan(
   const authorized = await getAuthorizedContext(PERMISSIONS.EXPENSES_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
-  if (!workspaceId) return failure("No workspace is associated with your account.")
+  const { supabase, companyId, workspaceId, userId, employee } =
+    authorized.context
+  if (!employee) {
+    return failure(
+      "Your account is not linked to an employee record. Ask an administrator to link it before creating expense plans."
+    )
+  }
 
-  const { data: employee, error: employeeError } = await supabase
-    .from("employees")
-    .select("id")
-    .eq("id", input.employeeId)
-    .eq("company_id", companyId)
-    .maybeSingle()
-  if (employeeError) return failure(employeeError.message)
-  if (!employee) return failure("Employee not found in this company.")
+  const planWorkspaceId = employee.workspace_id || workspaceId
 
+  // Status is intentionally omitted: the database default applies on create.
   const { data, error } = await supabase
     .from("expense_plans")
     .insert({
       company_id: companyId,
-      workspace_id: workspaceId,
-      employee_id: input.employeeId,
+      workspace_id: planWorkspaceId,
+      employee_id: employee.id,
       title: input.title.trim(),
       description: input.description?.trim() || null,
       start_date: input.startDate,
       end_date: input.endDate,
-      status: planStatus(input.status),
       currency: input.currency?.trim().toUpperCase() || "PHP",
       created_by: userId,
     })
@@ -121,19 +150,18 @@ export async function createExpensePlan(
 
   await logActivity(
     supabase,
-    { companyId, workspaceId, userId },
-    authorized.context.employee?.id ?? null,
+    { companyId, workspaceId: planWorkspaceId, userId },
+    employee.id,
     {
       action: "create",
       entityType: "expense_plan",
       entityId: data.id,
       summary: `Created expense plan ${input.title.trim()}`,
-      metadata: { employee_id: input.employeeId },
+      metadata: { employee_id: employee.id },
     }
   )
 
-  revalidatePath("/expenses")
-  revalidatePath("/feed")
+  revalidateExpensePages()
 
   return { success: true, data }
 }
@@ -156,7 +184,6 @@ export async function updateExpensePlan(
   const { data, error } = await supabase
     .from("expense_plans")
     .update({
-      employee_id: input.employeeId || undefined,
       title: input.title.trim(),
       description: input.description?.trim() || null,
       start_date: input.startDate,
@@ -187,8 +214,7 @@ export async function updateExpensePlan(
     }
   )
 
-  revalidatePath("/expenses")
-  revalidatePath("/feed")
+  revalidateExpensePages()
 
   return { success: true, data }
 }
@@ -226,20 +252,21 @@ export async function deleteExpensePlan(
     }
   )
 
-  revalidatePath("/expenses")
-  revalidatePath("/feed")
+  revalidateExpensePages()
 
   return { success: true, data: { id } }
 }
 
 export type CreateExpenseInput = {
-  planId: string
+  planId?: string
   expenseDate: string
+  categoryId?: string
   category?: string
   description: string
   amount: number
   currency?: string
   receiptPath?: string
+  isReimbursable?: boolean
   status?: string
   notes?: string
 }
@@ -247,7 +274,6 @@ export type CreateExpenseInput = {
 export async function createExpense(
   input: CreateExpenseInput
 ): Promise<ActionResult<{ id: string }>> {
-  if (!input.planId) return failure("Select an expense plan.")
   if (!input.description.trim()) return failure("An expense description is required.")
   if (!Number.isFinite(input.amount) || input.amount < 0) {
     return failure("Enter a valid expense amount.")
@@ -257,35 +283,64 @@ export async function createExpense(
   const authorized = await getAuthorizedContext(PERMISSIONS.EXPENSES_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
-
-  const { data: plan, error: planError } = await supabase
-    .from("expense_plans")
-    .select("id, employee_id, workspace_id, start_date, end_date")
-    .eq("id", input.planId)
-    .eq("company_id", companyId)
-    .maybeSingle()
-
-  if (planError) return failure(planError.message)
-  if (!plan) return failure("Expense plan not found in this company.")
-  if (input.expenseDate < plan.start_date || input.expenseDate > plan.end_date) {
-    return failure("The expense date must fall inside the plan date range.")
+  const { supabase, companyId, workspaceId, userId, employee } =
+    authorized.context
+  if (!employee) {
+    return failure(
+      "Your account is not linked to an employee record. Ask an administrator to link it before recording expenses."
+    )
   }
 
+  let planId: string | null = input.planId?.trim() || null
+  let expenseWorkspaceId = employee.workspace_id || workspaceId
+
+  if (planId) {
+    const { data: plan, error: planError } = await supabase
+      .from("expense_plans")
+      .select("id, employee_id, workspace_id, start_date, end_date")
+      .eq("id", planId)
+      .eq("company_id", companyId)
+      .maybeSingle()
+
+    if (planError) return failure(planError.message)
+    if (!plan) return failure("Expense plan not found in this company.")
+    if (plan.employee_id !== employee.id) {
+      return failure("You can only add expenses to your own expense plan.")
+    }
+    if (
+      input.expenseDate < plan.start_date ||
+      input.expenseDate > plan.end_date
+    ) {
+      return failure("The expense date must fall inside the plan date range.")
+    }
+    expenseWorkspaceId = plan.workspace_id
+  } else {
+    planId = null
+  }
+
+  if (!expenseWorkspaceId) {
+    return failure("No workspace is associated with your account.")
+  }
+
+  const category = await resolveCategory(supabase, companyId, input.categoryId)
+  if ("error" in category) return failure(category.error)
+
+  // Status is intentionally omitted: the database default applies on create.
   const { data, error } = await supabase
     .from("expenses")
     .insert({
       company_id: companyId,
-      workspace_id: plan.workspace_id,
-      plan_id: plan.id,
-      employee_id: plan.employee_id,
+      workspace_id: expenseWorkspaceId,
+      plan_id: planId,
+      employee_id: employee.id,
       expense_date: input.expenseDate,
-      category: input.category?.trim() || "other",
+      ...(category.name ? { category: category.name } : {}),
+      category_id: category.categoryId,
       description: input.description.trim(),
       amount: input.amount,
       currency: input.currency?.trim().toUpperCase() || "PHP",
       receipt_path: input.receiptPath?.trim() || null,
-      status: expenseStatus(input.status),
+      is_reimbursable: Boolean(input.isReimbursable),
       notes: input.notes?.trim() || null,
       created_by: userId,
     })
@@ -297,22 +352,21 @@ export async function createExpense(
     return failure(error.message)
   }
 
-  await syncPlanTotal(supabase, companyId, plan.id)
+  await syncPlanTotal(supabase, companyId, planId)
   await logActivity(
     supabase,
-    { companyId, workspaceId, userId },
-    authorized.context.employee?.id ?? null,
+    { companyId, workspaceId: expenseWorkspaceId, userId },
+    employee.id,
     {
       action: "create",
       entityType: "expense",
       entityId: data.id,
       summary: `Added expense ${input.description.trim()}`,
-      metadata: { plan_id: plan.id, amount: input.amount },
+      metadata: { plan_id: planId, amount: input.amount },
     }
   )
 
-  revalidatePath("/expenses")
-  revalidatePath("/feed")
+  revalidateExpensePages()
 
   return { success: true, data }
 }
@@ -331,26 +385,72 @@ export async function updateExpense(
   const authorized = await getAuthorizedContext(PERMISSIONS.EXPENSES_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId } = authorized.context
+  const { supabase, companyId, workspaceId, employee } = authorized.context
 
   const { data: existing, error: existingError } = await supabase
     .from("expenses")
-    .select("id, plan_id")
+    .select("id, plan_id, employee_id")
     .eq("id", input.id)
     .eq("company_id", companyId)
     .maybeSingle()
   if (existingError) return failure(existingError.message)
   if (!existing) return failure("Expense not found in this company.")
 
+  let employeeId = existing.employee_id
+  let planId: string | null = input.planId?.trim() || null
+  let expenseWorkspaceId: string | null = null
+
+  if (planId) {
+    const { data: plan, error: planError } = await supabase
+      .from("expense_plans")
+      .select("id, employee_id, workspace_id, start_date, end_date")
+      .eq("id", planId)
+      .eq("company_id", companyId)
+      .maybeSingle()
+
+    if (planError) return failure(planError.message)
+    if (!plan) return failure("Expense plan not found in this company.")
+    if (planId !== existing.plan_id) {
+      if (!employee) {
+        return failure(
+          "Your account is not linked to an employee record. Ask an administrator to link it before attaching expenses to a plan."
+        )
+      }
+      if (plan.employee_id !== employee.id) {
+        return failure("You can only attach expenses to your own expense plan.")
+      }
+    }
+    if (
+      input.expenseDate < plan.start_date ||
+      input.expenseDate > plan.end_date
+    ) {
+      return failure("The expense date must fall inside the plan date range.")
+    }
+    employeeId = plan.employee_id
+    expenseWorkspaceId = plan.workspace_id
+  } else {
+    planId = null
+  }
+
+  const category = await resolveCategory(supabase, companyId, input.categoryId)
+  if ("error" in category) return failure(category.error)
+
   const { error } = await supabase
     .from("expenses")
     .update({
+      plan_id: planId,
+      employee_id: employeeId,
+      ...(expenseWorkspaceId ? { workspace_id: expenseWorkspaceId } : {}),
       expense_date: input.expenseDate || undefined,
-      category: input.category?.trim() || "other",
+      category: category.name ?? "other",
+      category_id: category.categoryId,
       description: input.description.trim(),
       amount: input.amount,
       currency: input.currency?.trim().toUpperCase() || "PHP",
-      receipt_path: input.receiptPath?.trim() || null,
+      ...(input.receiptPath !== undefined
+        ? { receipt_path: input.receiptPath.trim() || null }
+        : {}),
+      is_reimbursable: Boolean(input.isReimbursable),
       status: expenseStatus(input.status),
       notes: input.notes?.trim() || null,
       updated_at: new Date().toISOString(),
@@ -364,10 +464,17 @@ export async function updateExpense(
   }
 
   await syncPlanTotal(supabase, companyId, existing.plan_id)
+  if (planId && planId !== existing.plan_id) {
+    await syncPlanTotal(supabase, companyId, planId)
+  }
   await logActivity(
     supabase,
-    { companyId, workspaceId, userId: authorized.context.userId },
-    authorized.context.employee?.id ?? null,
+    {
+      companyId,
+      workspaceId: expenseWorkspaceId ?? workspaceId,
+      userId: authorized.context.userId,
+    },
+    employee?.id ?? existing.employee_id,
     {
       action: "update",
       entityType: "expense",
@@ -376,8 +483,7 @@ export async function updateExpense(
     }
   )
 
-  revalidatePath("/expenses")
-  revalidatePath("/feed")
+  revalidateExpensePages()
 
   return { success: true, data: { id: input.id } }
 }
@@ -425,8 +531,7 @@ export async function deleteExpense(
     }
   )
 
-  revalidatePath("/expenses")
-  revalidatePath("/feed")
+  revalidateExpensePages()
 
   return { success: true, data: { id } }
 }

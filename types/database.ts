@@ -506,19 +506,44 @@ export interface Expense {
   id: UUID
   company_id: UUID
   workspace_id: UUID
-  plan_id: UUID
+  plan_id: UUID | null
   employee_id: UUID
   expense_date: ISODate
   category: string
+  category_id: UUID | null
   description: string
   amount: number
   currency: string
   receipt_path: string | null
+  is_reimbursable: boolean
   status: ExpenseStatus
   notes: string | null
   created_by: UUID | null
   created_at: ISODateTime
   updated_at: ISODateTime
+}
+
+export interface ExpenseCategory {
+  id: UUID
+  company_id: UUID
+  name: string
+  code: string
+  description: string | null
+  is_active: boolean
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface ExpenseAttachment {
+  id: UUID
+  company_id: UUID
+  expense_id: UUID
+  storage_path: string
+  file_name: string
+  mime_type: string | null
+  size_bytes: number | null
+  uploaded_by: UUID | null
+  created_at: ISODateTime
 }
 
 export interface ProductionPipeline {
@@ -880,7 +905,9 @@ export type Database = {
       outlets: TableDefinition<Db.Outlet>
       employee_outlet_assignments: TableDefinition<Db.EmployeeOutletAssignment>
       expense_plans: TableDefinition<Db.ExpensePlan>
+      expense_categories: TableDefinition<Db.ExpenseCategory>
       expenses: TableDefinition<Db.Expense>
+      expense_attachments: TableDefinition<Db.ExpenseAttachment>
       production_pipelines: TableDefinition<Db.ProductionPipeline>
       production_stages: TableDefinition<Db.ProductionStage>
       production_runs: TableDefinition<Db.ProductionRun>

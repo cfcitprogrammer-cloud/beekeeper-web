@@ -592,18 +592,43 @@ export type ExpensePlan = {
   updated_at: string
 }
 
+export type ExpenseCategory = {
+  id: string
+  company_id: string
+  name: string
+  code: string
+  description: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type ExpenseAttachment = {
+  id: string
+  company_id: string
+  expense_id: string
+  storage_path: string
+  file_name: string
+  mime_type: string | null
+  size_bytes: number | null
+  uploaded_by: string | null
+  created_at: string
+}
+
 export type Expense = {
   id: string
   company_id: string
   workspace_id: string
-  plan_id: string
+  plan_id: string | null
   employee_id: string
   expense_date: string
   category: string
+  category_id: string | null
   description: string
   amount: number
   currency: string
   receipt_path: string | null
+  is_reimbursable: boolean
   status: ExpenseStatus
   notes: string | null
   created_by: string | null

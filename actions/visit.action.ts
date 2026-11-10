@@ -43,11 +43,15 @@ function haversineMeters(
   return Math.round(2 * radius * Math.asin(Math.sqrt(a)) * 100) / 100
 }
 
+/**
+ * A visit is planned when the employee has a draft/active visit plan covering
+ * the visit date. Plans intentionally have no target-outlet list, so any
+ * outlet works for a planned visit.
+ */
 async function findMatchingPlan(
   supabase: ActionContext["supabase"],
   companyId: string,
   employeeId: string,
-  outletId: string,
   date: string
 ): Promise<string | null> {
   const { data: plans, error } = await supabase
@@ -58,35 +62,31 @@ async function findMatchingPlan(
     .in("status", ["draft", "active"])
     .lte("start_date", date)
     .gte("end_date", date)
-
-  if (error || !plans || plans.length === 0) return null
-
-  const planIds = (plans as { id: string }[]).map((plan) => plan.id)
-  const { data: targets } = await supabase
-    .from("visit_plan_outlets")
-    .select("plan_id")
-    .eq("company_id", companyId)
-    .eq("outlet_id", outletId)
-    .in("plan_id", planIds)
+    .order("start_date", { ascending: false })
     .limit(1)
 
-  return (targets?.[0]?.plan_id as string | undefined) ?? null
+  if (error || !plans || plans.length === 0) return null
+  return (plans[0] as { id: string }).id
+}
+
+function revalidateVisitPages() {
+  revalidatePath("/visits")
+  revalidatePath("/visits/plans")
+  revalidatePath("/visits/log")
+  revalidatePath("/feed")
 }
 
 export type CreateVisitPlanInput = {
-  employeeId: string
   name: string
   startDate: string
   endDate: string
   notes?: string
   status?: string
-  outletIds?: string[]
 }
 
 export async function createVisitPlan(
   input: CreateVisitPlanInput
 ): Promise<ActionResult<{ id: string }>> {
-  if (!input.employeeId) return failure("Select an employee.")
   if (!input.name.trim()) return failure("A visit plan name is required.")
   const rangeError = dateError(input.startDate, input.endDate)
   if (rangeError) return failure(rangeError)
@@ -94,29 +94,27 @@ export async function createVisitPlan(
   const authorized = await getAuthorizedContext(PERMISSIONS.VISITS_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
-  if (!workspaceId) return failure("No workspace is associated with your account.")
+  const { supabase, companyId, workspaceId, userId, employee } =
+    authorized.context
+  if (!employee) {
+    return failure(
+      "Your account is not linked to an employee record. Ask an administrator to link it before creating visit plans."
+    )
+  }
 
-  const { data: employee, error: employeeError } = await supabase
-    .from("employees")
-    .select("id")
-    .eq("id", input.employeeId)
-    .eq("company_id", companyId)
-    .maybeSingle()
-  if (employeeError) return failure(employeeError.message)
-  if (!employee) return failure("Employee not found in this company.")
+  const planWorkspaceId = employee.workspace_id || workspaceId
 
+  // Status is intentionally omitted: the database default applies on create.
   const { data, error } = await supabase
     .from("visit_plans")
     .insert({
       company_id: companyId,
-      workspace_id: workspaceId,
-      employee_id: input.employeeId,
+      workspace_id: planWorkspaceId,
+      employee_id: employee.id,
       name: input.name.trim(),
       start_date: input.startDate,
       end_date: input.endDate,
       notes: input.notes?.trim() || null,
-      status: planStatus(input.status),
       created_by: userId,
     })
     .select("id")
@@ -127,47 +125,20 @@ export async function createVisitPlan(
     return failure(error.message)
   }
 
-  const outletIds = Array.from(new Set((input.outletIds ?? []).filter(Boolean)))
-  if (outletIds.length > 0) {
-    const { data: outlets, error: outletError } = await supabase
-      .from("outlets")
-      .select("id")
-      .eq("company_id", companyId)
-      .in("id", outletIds)
-    if (outletError) return failure(outletError.message)
-    const validIds = new Set(
-      ((outlets ?? []) as { id: string }[]).map((outlet) => outlet.id)
-    )
-    if (validIds.size > 0) {
-      const { error: targetError } = await supabase.from("visit_plan_outlets").insert(
-        Array.from(validIds).map((outletId) => ({
-          company_id: companyId,
-          plan_id: data.id,
-          outlet_id: outletId,
-        }))
-      )
-      if (targetError) {
-        await supabase.from("visit_plans").delete().eq("id", data.id)
-        return failure(targetError.message)
-      }
-    }
-  }
-
   await logActivity(
     supabase,
-    { companyId, workspaceId, userId },
-    authorized.context.employee?.id ?? null,
+    { companyId, workspaceId: planWorkspaceId, userId },
+    employee.id,
     {
       action: "create",
       entityType: "visit_plan",
       entityId: data.id,
       summary: `Created visit plan ${input.name.trim()}`,
-      metadata: { employee_id: input.employeeId, outlet_count: outletIds.length },
+      metadata: { employee_id: employee.id },
     }
   )
 
-  revalidatePath("/visits")
-  revalidatePath("/feed")
+  revalidateVisitPages()
 
   return { success: true, data }
 }
@@ -190,7 +161,6 @@ export async function updateVisitPlan(
   const { data, error } = await supabase
     .from("visit_plans")
     .update({
-      employee_id: input.employeeId || undefined,
       name: input.name.trim(),
       start_date: input.startDate,
       end_date: input.endDate,
@@ -220,8 +190,7 @@ export async function updateVisitPlan(
     }
   )
 
-  revalidatePath("/visits")
-  revalidatePath("/feed")
+  revalidateVisitPages()
 
   return { success: true, data }
 }
@@ -259,133 +228,13 @@ export async function deleteVisitPlan(
     }
   )
 
-  revalidatePath("/visits")
-  revalidatePath("/feed")
-
-  return { success: true, data: { id } }
-}
-
-export type AddVisitTargetInput = {
-  planId: string
-  outletId: string
-  plannedDate?: string
-  notes?: string
-}
-
-export async function addVisitPlanOutlet(
-  input: AddVisitTargetInput
-): Promise<ActionResult<{ id: string }>> {
-  if (!input.planId || !input.outletId) {
-    return failure("Select a plan and an outlet.")
-  }
-
-  const authorized = await getAuthorizedContext(PERMISSIONS.VISITS_CREATE)
-  if ("error" in authorized) return authorized.error
-
-  const { supabase, companyId, workspaceId } = authorized.context
-
-  const [planResult, outletResult] = await Promise.all([
-    supabase
-      .from("visit_plans")
-      .select("id")
-      .eq("id", input.planId)
-      .eq("company_id", companyId)
-      .maybeSingle(),
-    supabase
-      .from("outlets")
-      .select("id")
-      .eq("id", input.outletId)
-      .eq("company_id", companyId)
-      .maybeSingle(),
-  ])
-
-  if (planResult.error) return failure(planResult.error.message)
-  if (!planResult.data) return failure("Visit plan not found in this company.")
-  if (outletResult.error) return failure(outletResult.error.message)
-  if (!outletResult.data) return failure("Outlet not found in this company.")
-
-  const { data, error } = await supabase
-    .from("visit_plan_outlets")
-    .insert({
-      company_id: companyId,
-      plan_id: input.planId,
-      outlet_id: input.outletId,
-      planned_date: input.plannedDate || null,
-      notes: input.notes?.trim() || null,
-    })
-    .select("id")
-    .single()
-
-  if (error) {
-    if (error.code === "23505") {
-      return failure("This outlet is already a target of the visit plan.")
-    }
-    console.error("[action:addVisitPlanOutlet]", error)
-    return failure(error.message)
-  }
-
-  await logActivity(
-    supabase,
-    { companyId, workspaceId, userId: authorized.context.userId },
-    authorized.context.employee?.id ?? null,
-    {
-      action: "create",
-      entityType: "visit_plan_outlet",
-      entityId: data.id,
-      summary: "Added a target outlet to a visit plan",
-      metadata: { plan_id: input.planId, outlet_id: input.outletId },
-    }
-  )
-
-  revalidatePath("/visits")
-  revalidatePath("/feed")
-
-  return { success: true, data }
-}
-
-export async function removeVisitPlanOutlet(
-  id: string
-): Promise<ActionResult<{ id: string }>> {
-  if (!id) return failure("Target id is required.")
-
-  const authorized = await getAuthorizedContext(PERMISSIONS.VISITS_DELETE)
-  if ("error" in authorized) return authorized.error
-
-  const { supabase, companyId, workspaceId } = authorized.context
-
-  const { error } = await supabase
-    .from("visit_plan_outlets")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", companyId)
-
-  if (error) {
-    console.error("[action:removeVisitPlanOutlet]", error)
-    return failure(error.message)
-  }
-
-  await logActivity(
-    supabase,
-    { companyId, workspaceId, userId: authorized.context.userId },
-    authorized.context.employee?.id ?? null,
-    {
-      action: "delete",
-      entityType: "visit_plan_outlet",
-      entityId: id,
-      summary: "Removed a target outlet from a visit plan",
-    }
-  )
-
-  revalidatePath("/visits")
-  revalidatePath("/feed")
+  revalidateVisitPages()
 
   return { success: true, data: { id } }
 }
 
 export type CheckInVisitInput = {
-  employeeId: string
   outletId: string
-  planId?: string
   latitude?: number
   longitude?: number
   notes?: string
@@ -395,71 +244,65 @@ export type CheckInVisitInput = {
 export async function checkInVisit(
   input: CheckInVisitInput
 ): Promise<ActionResult<{ id: string; is_planned: boolean; plan_id: string | null }>> {
-  if (!input.employeeId || !input.outletId) {
-    return failure("Select an employee and an outlet.")
+  if (!input.outletId) {
+    return failure("Select an outlet.")
   }
 
   const authorized = await getAuthorizedContext(PERMISSIONS.VISITS_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
-  if (!workspaceId) return failure("No workspace is associated with your account.")
+  const { supabase, companyId, workspaceId, userId, employee } =
+    authorized.context
+  if (!employee) {
+    return failure(
+      "Your account is not linked to an employee record. Ask an administrator to link it before checking in."
+    )
+  }
 
-  const [employeeResult, outletResult] = await Promise.all([
-    supabase
-      .from("employees")
-      .select("id")
-      .eq("id", input.employeeId)
-      .eq("company_id", companyId)
-      .maybeSingle(),
-    supabase
-      .from("outlets")
-      .select("id, latitude, longitude")
-      .eq("id", input.outletId)
-      .eq("company_id", companyId)
-      .maybeSingle(),
-  ])
+  const visitWorkspaceId = employee.workspace_id || workspaceId
 
-  if (employeeResult.error) return failure(employeeResult.error.message)
-  if (!employeeResult.data) return failure("Employee not found in this company.")
-  if (outletResult.error) return failure(outletResult.error.message)
-  if (!outletResult.data) return failure("Outlet not found in this company.")
+  const { data: outlet, error: outletError } = await supabase
+    .from("outlets")
+    .select("id, latitude, longitude")
+    .eq("id", input.outletId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (outletError) return failure(outletError.message)
+  if (!outlet) return failure("Outlet not found in this company.")
 
   const checkInAt = input.checkInAt || new Date().toISOString()
   const visitDate = checkInAt.slice(0, 10)
-  const matchedPlanId = await findMatchingPlan(
+  const planId = await findMatchingPlan(
     supabase,
     companyId,
-    input.employeeId,
-    input.outletId,
+    employee.id,
     visitDate
   )
-
-  const requestedPlanId = input.planId?.trim() || null
-  const planId = matchedPlanId ?? null
   const isPlanned = planId !== null
 
   let distance: number | null = null
   if (
     typeof input.latitude === "number" &&
     typeof input.longitude === "number" &&
-    typeof outletResult.data.latitude === "number" &&
-    typeof outletResult.data.longitude === "number"
+    typeof outlet.latitude === "number" &&
+    typeof outlet.longitude === "number"
   ) {
     distance = haversineMeters(
       input.latitude,
       input.longitude,
-      outletResult.data.latitude,
-      outletResult.data.longitude
+      outlet.latitude,
+      outlet.longitude
     )
   }
 
+  // Status is intentionally omitted: the database default applies on create.
   const { data, error } = await supabase
     .from("visits")
     .insert({
       company_id: companyId,
-      workspace_id: workspaceId,
-      employee_id: input.employeeId,
+      workspace_id: visitWorkspaceId,
+      employee_id: employee.id,
       outlet_id: input.outletId,
       plan_id: planId,
       is_planned: isPlanned,
@@ -469,7 +312,6 @@ export async function checkInVisit(
       check_in_longitude: input.longitude ?? null,
       check_in_distance_m: distance,
       notes: input.notes?.trim() || null,
-      status: "checked_in",
       created_by: userId,
     })
     .select("id, is_planned, plan_id")
@@ -482,25 +324,23 @@ export async function checkInVisit(
 
   await logActivity(
     supabase,
-    { companyId, workspaceId, userId },
-    authorized.context.employee?.id ?? null,
+    { companyId, workspaceId: visitWorkspaceId, userId },
+    employee.id,
     {
       action: "check_in",
       entityType: "visit",
       entityId: data.id,
       summary: `${isPlanned ? "Planned" : "Unplanned"} visit check-in`,
       metadata: {
-        employee_id: input.employeeId,
+        employee_id: employee.id,
         outlet_id: input.outletId,
         plan_id: planId,
-        requested_plan_id: requestedPlanId,
         distance_m: distance,
       },
     }
   )
 
-  revalidatePath("/visits")
-  revalidatePath("/feed")
+  revalidateVisitPages()
 
   return { success: true, data }
 }
@@ -576,8 +416,7 @@ export async function checkOutVisit(
     }
   )
 
-  revalidatePath("/visits")
-  revalidatePath("/feed")
+  revalidateVisitPages()
 
   return { success: true, data: { id: input.visitId } }
 }
@@ -614,8 +453,7 @@ export async function cancelVisit(
     }
   )
 
-  revalidatePath("/visits")
-  revalidatePath("/feed")
+  revalidateVisitPages()
 
   return { success: true, data: { id } }
 }

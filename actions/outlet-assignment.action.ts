@@ -9,6 +9,18 @@ import {
 } from "@/actions/helpers/context"
 import { logActivity } from "@/actions/helpers/activity"
 import { PERMISSIONS } from "@/lib/auth/permissions"
+import { searchAssignableEmployees } from "@/lib/data/queries"
+import type { EmployeeWithRelations } from "@/types/database"
+
+export async function searchAssignmentEmployees(
+  term: string
+): Promise<ActionResult<EmployeeWithRelations[]>> {
+  const authorized = await getAuthorizedContext(PERMISSIONS.OUTLETS_VIEW)
+  if ("error" in authorized) return authorized.error
+
+  const result = await searchAssignableEmployees(term, 20)
+  return { success: true, data: result.data }
+}
 
 export type AssignOutletsInput = {
   employeeId: string

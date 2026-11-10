@@ -1,42 +1,70 @@
-import { CalendarClock, CheckCircle2, MapPinOff, Route } from "lucide-react"
+import Link from "next/link"
+import {
+  ArrowRight,
+  CalendarClock,
+  CheckCircle2,
+  LogIn,
+  MapPinOff,
+  Route,
+} from "lucide-react"
 
-import { VisitsManager } from "@/components/visits/visits-manager"
 import { MetricCard } from "@/components/shared/metric-card"
 import { PageHeader } from "@/components/shared/page-header"
+import { Button } from "@/components/ui/button"
 import { requirePermission } from "@/lib/auth/guards"
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { getVisitPlans, getVisits } from "@/lib/data/operations"
-import { getEmployees, getOutlets } from "@/lib/data/queries"
 
 export default async function VisitsPage() {
   await requirePermission(PERMISSIONS.VISITS_VIEW)
 
-  const [plansResult, visitsResult, employeesResult, outletsResult] =
-    await Promise.all([
-      getVisitPlans(),
-      getVisits(),
-      getEmployees(),
-      getOutlets(),
-    ])
+  const [plansResult, visitsResult] = await Promise.all([
+    getVisitPlans(),
+    getVisits(),
+  ])
 
   const plans = plansResult.data
   const visits = visitsResult.data
   const todayKey = new Date().toISOString().slice(0, 10)
-
-  const todayVisits = visits.filter((visit) =>
-    visit.check_in_at.startsWith(todayKey)
-  )
+  const todayVisits = visits.filter((visit) => visit.check_in_at.startsWith(todayKey))
   const unplanned = visits.filter((visit) => !visit.is_planned)
   const activePlans = plans.filter((plan) =>
-    ["DRAFT", "ACTIVE"].includes(plan.status)
+    ["draft", "active"].includes(plan.status.toLowerCase())
   )
+
+  const sections = [
+    {
+      title: "Visit log",
+      description: "All recorded visits with their outlet, check-in, check-out and status.",
+      href: "/visits/log",
+      icon: Route,
+      count: `${visits.length} visits`,
+      action: "Open visit log",
+    },
+    {
+      title: "Visit plans",
+      description: "Date ranges reserved for an employee. No target outlets required.",
+      href: "/visits/plans",
+      icon: CalendarClock,
+      count: `${plans.length} plans`,
+      action: "Open plans",
+    },
+    {
+      title: "Check in",
+      description: "Record a visit at a specific outlet, with or without a plan.",
+      href: "/visits/check-in",
+      icon: LogIn,
+      count: `${todayVisits.length} today`,
+      action: "Check in now",
+    },
+  ]
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Field operations"
         title="Visits"
-        description="Plan outlet coverage and record check-ins. Visits outside an active plan are automatically classified as unplanned."
+        description="Plan visit date ranges, check in at outlets, and review the visit log."
         icon={Route}
       />
 
@@ -58,7 +86,7 @@ export default async function VisitsPage() {
         <MetricCard
           label="Unplanned visits"
           value={unplanned.length}
-          hint="No matching plan target"
+          hint="No active plan for the employee/date"
           icon={MapPinOff}
           accent="amber"
         />
@@ -71,12 +99,33 @@ export default async function VisitsPage() {
         />
       </div>
 
-      <VisitsManager
-        plans={plans}
-        visits={visits}
-        employees={employeesResult.data}
-        outlets={outletsResult.data}
-      />
+      <div className="grid gap-3 md:grid-cols-3">
+        {sections.map((section) => {
+          const Icon = section.icon
+          return (
+            <div key={section.href} className="rounded-xl border bg-card p-4">
+              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Icon className="size-4.5" />
+              </span>
+              <h2 className="mt-3 font-heading text-sm font-semibold">{section.title}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{section.description}</p>
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <span className="text-[0.625rem] text-muted-foreground">
+                  {section.count}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<Link href={section.href} />}
+                >
+                  {section.action}
+                  <ArrowRight />
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

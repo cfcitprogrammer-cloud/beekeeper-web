@@ -3,6 +3,8 @@ import type {
   Employee,
   EmployeeOutletAssignment,
   Expense,
+  ExpenseAttachment,
+  ExpenseCategory,
   ExpensePlan,
   Outlet,
   ProductionPipeline,
@@ -11,7 +13,6 @@ import type {
   ProductionUsage,
   Visit,
   VisitPlan,
-  VisitPlanOutlet,
 } from "@/db/models/models"
 
 export type QueryResult<T> = { data: T }
@@ -108,18 +109,70 @@ export async function getExpensePlan(
   })
 }
 
-export async function getExpense(
-  id: string
-): Promise<QueryResult<Expense | null>> {
+export type ExpenseWithRelations = Expense & {
+  employee: EmployeeSummary | null
+  plan: Pick<
+    ExpensePlan,
+    "id" | "title" | "start_date" | "end_date" | "status"
+  > | null
+  category: Pick<ExpenseCategory, "id" | "name" | "code"> | null
+  attachments: ExpenseAttachment[]
+}
+
+const EXPENSE_SELECT =
+  "*, employee:employees(id,employee_no,first_name,last_name,email), plan:expense_plans(id,title,start_date,end_date,status), category:expense_categories(id,name,code), attachments:expense_attachments(*)"
+
+export async function getExpenses(): Promise<QueryResult<ExpenseWithRelations[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("expenses")
-    .select("*")
+    .select(EXPENSE_SELECT)
+    .order("expense_date", { ascending: false })
+    .order("created_at", { ascending: false })
+
+  logError("expenses", error)
+  return empty((data as ExpenseWithRelations[] | null) ?? [])
+}
+
+export async function getExpense(
+  id: string
+): Promise<QueryResult<ExpenseWithRelations | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("expenses")
+    .select(EXPENSE_SELECT)
     .eq("id", id)
     .maybeSingle()
 
   logError("expense", error)
-  return empty((data as Expense | null) ?? null)
+  return empty((data as ExpenseWithRelations | null) ?? null)
+}
+
+export async function getExpenseCategories(): Promise<
+  QueryResult<ExpenseCategory[]>
+> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("expense_categories")
+    .select("*")
+    .order("name")
+
+  logError("expense-categories", error)
+  return empty((data as ExpenseCategory[] | null) ?? [])
+}
+
+export async function getExpenseCategory(
+  id: string
+): Promise<QueryResult<ExpenseCategory | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("expense_categories")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("expense-category", error)
+  return empty((data as ExpenseCategory | null) ?? null)
 }
 
 export type ProductionPipelineWithRelations = ProductionPipeline & {
@@ -217,64 +270,31 @@ export async function getProductionRun(
 
 export type VisitPlanWithRelations = VisitPlan & {
   employee: EmployeeSummary | null
-  targets: (VisitPlanOutlet & { outlet: OutletSummary | null })[]
 }
 
 export async function getVisitPlans(): Promise<QueryResult<VisitPlanWithRelations[]>> {
   const supabase = await createClient()
-  const [plansResult, targetsResult] = await Promise.all([
-    supabase
-      .from("visit_plans")
-      .select("*, employee:employees(id,employee_no,first_name,last_name,email)")
-      .order("start_date", { ascending: false }),
-    supabase
-      .from("visit_plan_outlets")
-      .select("*, outlet:outlets(id,code,name,address)"),
-  ])
+  const { data, error } = await supabase
+    .from("visit_plans")
+    .select("*, employee:employees(id,employee_no,first_name,last_name,email)")
+    .order("start_date", { ascending: false })
 
-  logError("visit-plans", plansResult.error)
-  logError("visit-plan-outlets", targetsResult.error)
-  if (plansResult.error || !plansResult.data) return empty([])
-
-  const targets = (targetsResult.data ?? []) as (VisitPlanOutlet & {
-    outlet: OutletSummary | null
-  })[]
-
-  return empty(
-    (plansResult.data as (VisitPlan & { employee: EmployeeSummary | null })[]).map(
-      (plan) => ({
-        ...plan,
-        targets: targets.filter((target) => target.plan_id === plan.id),
-      })
-    )
-  )
+  logError("visit-plans", error)
+  return empty((data as VisitPlanWithRelations[] | null) ?? [])
 }
 
 export async function getVisitPlan(
   id: string
 ): Promise<QueryResult<VisitPlanWithRelations | null>> {
   const supabase = await createClient()
-  const [planResult, targetsResult] = await Promise.all([
-    supabase
-      .from("visit_plans")
-      .select("*, employee:employees(id,employee_no,first_name,last_name,email)")
-      .eq("id", id)
-      .maybeSingle(),
-    supabase
-      .from("visit_plan_outlets")
-      .select("*, outlet:outlets(id,code,name,address)")
-      .eq("plan_id", id),
-  ])
+  const { data, error } = await supabase
+    .from("visit_plans")
+    .select("*, employee:employees(id,employee_no,first_name,last_name,email)")
+    .eq("id", id)
+    .maybeSingle()
 
-  logError("visit-plan", planResult.error)
-  logError("visit-plan-targets", targetsResult.error)
-  if (planResult.error || !planResult.data) return empty(null)
-  return empty({
-    ...(planResult.data as VisitPlan & { employee: EmployeeSummary | null }),
-    targets: (targetsResult.data ?? []) as (VisitPlanOutlet & {
-      outlet: OutletSummary | null
-    })[],
-  })
+  logError("visit-plan", error)
+  return empty((data as VisitPlanWithRelations | null) ?? null)
 }
 
 export type VisitWithRelations = Visit & {

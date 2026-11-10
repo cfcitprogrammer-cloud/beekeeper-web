@@ -220,12 +220,56 @@ export const navSections: NavSection[] = [
         href: "/visits",
         icon: Route,
         permission: PERMISSIONS.VISITS_VIEW,
+        children: [
+          {
+            title: "Overview",
+            href: "/visits",
+            permission: PERMISSIONS.VISITS_VIEW,
+          },
+          {
+            title: "Visit plans",
+            href: "/visits/plans",
+            permission: PERMISSIONS.VISITS_VIEW,
+          },
+          {
+            title: "Visit log",
+            href: "/visits/log",
+            permission: PERMISSIONS.VISITS_VIEW,
+          },
+          {
+            title: "Check in",
+            href: "/visits/check-in",
+            permission: PERMISSIONS.VISITS_CREATE,
+          },
+        ],
       },
       {
         title: "Expenses",
         href: "/expenses",
         icon: Wallet,
         permission: PERMISSIONS.EXPENSES_VIEW,
+        children: [
+          {
+            title: "Overview",
+            href: "/expenses",
+            permission: PERMISSIONS.EXPENSES_VIEW,
+          },
+          {
+            title: "Expense items",
+            href: "/expenses/items",
+            permission: PERMISSIONS.EXPENSES_VIEW,
+          },
+          {
+            title: "Expense plans",
+            href: "/expenses/plans",
+            permission: PERMISSIONS.EXPENSES_VIEW,
+          },
+          {
+            title: "Categories",
+            href: "/expenses/categories",
+            permission: PERMISSIONS.EXPENSES_VIEW,
+          },
+        ],
       },
       {
         title: "Production",

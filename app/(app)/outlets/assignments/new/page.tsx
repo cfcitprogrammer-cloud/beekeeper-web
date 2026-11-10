@@ -4,13 +4,13 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { OutletAssignmentForm } from "@/components/outlets/outlet-assignment-form"
 import { PageHeader } from "@/components/shared/page-header"
-import { getEmployees, getOutlets } from "@/lib/data/queries"
+import { getAssignableEmployees, getOutlets } from "@/lib/data/queries"
 
 export default async function NewOutletAssignmentPage() {
   await requirePermission(PERMISSIONS.OUTLETS_CREATE)
 
   const [employeesResult, outletsResult] = await Promise.all([
-    getEmployees(),
+    getAssignableEmployees(5),
     getOutlets(),
   ])
 
@@ -19,11 +19,11 @@ export default async function NewOutletAssignmentPage() {
       <PageHeader
         eyebrow="Field operations"
         title="Assign outlets"
-        description="Select one employee and the outlets they cover. Active assignments are preserved."
+        description="Select one employee and the outlets they cover. Search to find employees beyond the first five."
         icon={MapPinned}
       />
       <OutletAssignmentForm
-        employees={employeesResult.data}
+        initialEmployees={employeesResult.data}
         outlets={outletsResult.data}
       />
     </div>
