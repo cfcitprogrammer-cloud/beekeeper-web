@@ -15,6 +15,10 @@
 --   db/migrations/20261108_extended_operations.sql
 --   db/migrations/20261109_outlet_location_fields.sql
 --   db/migrations/20261110_outlet_distributor.sql
+--   db/migrations/20261111_operations_rework.sql
+--   db/migrations/20261112_visit_schedule_photos.sql
+--   db/migrations/20261113_visit_plan_explicit_attachment.sql
+--   db/migrations/20261114_production_stage_usage.sql
 --   db/seed/super_admin.sql
 --   db/seed/rls_policies.sql        (optional)
 --   db/seed/storage.sql             (optional, once per project)

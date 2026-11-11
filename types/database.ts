@@ -149,7 +149,12 @@ export type ProductionRunStatus = (typeof PRODUCTION_RUN_STATUSES)[number]
 export const VISIT_PLAN_STATUSES = ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"] as const
 export type VisitPlanStatus = (typeof VISIT_PLAN_STATUSES)[number]
 
-export const VISIT_STATUSES = ["CHECKED_IN", "CHECKED_OUT", "CANCELLED"] as const
+export const VISIT_STATUSES = [
+  "SCHEDULED",
+  "CHECKED_IN",
+  "CHECKED_OUT",
+  "CANCELLED",
+] as const
 export type VisitStatus = (typeof VISIT_STATUSES)[number]
 
 /* -------------------------------------------------------------------------- */
@@ -573,6 +578,15 @@ export interface ProductionStage {
   updated_at: ISODateTime
 }
 
+export interface ProductionStageSku {
+  id: UUID
+  company_id: UUID
+  stage_id: UUID
+  sku_id: UUID
+  assigned_by: UUID | null
+  created_at: ISODateTime
+}
+
 export interface ProductionRun {
   id: UUID
   company_id: UUID
@@ -593,15 +607,19 @@ export interface ProductionUsage {
   company_id: UUID
   workspace_id: UUID
   pipeline_id: UUID
-  run_id: UUID
+  run_id: UUID | null
   stage_id: UUID
   source_stage_id: UUID | null
+  sku_id: UUID | null
+  quantity: number
   input_quantity: number
   output_quantity: number
   waste_quantity: number
   uom: string | null
   notes: string | null
+  submitted_by: UUID | null
   recorded_by: UUID | null
+  usage_date: ISODateTime
   recorded_at: ISODateTime
   created_at: ISODateTime
   updated_at: ISODateTime
@@ -641,12 +659,18 @@ export interface Visit {
   plan_id: UUID | null
   is_planned: boolean
   planned_date: ISODate | null
-  check_in_at: ISODateTime
+  start_date: ISODate
+  end_date: ISODate
+  start_time: string | null
+  end_time: string | null
+  check_in_at: ISODateTime | null
   check_out_at: ISODateTime | null
   check_in_latitude: number | null
   check_in_longitude: number | null
   check_out_latitude: number | null
   check_out_longitude: number | null
+  check_in_photo_path: string | null
+  check_out_photo_path: string | null
   check_in_distance_m: number | null
   notes: string | null
   status: VisitStatus
@@ -910,6 +934,7 @@ export type Database = {
       expense_attachments: TableDefinition<Db.ExpenseAttachment>
       production_pipelines: TableDefinition<Db.ProductionPipeline>
       production_stages: TableDefinition<Db.ProductionStage>
+      production_stage_skus: TableDefinition<Db.ProductionStageSku>
       production_runs: TableDefinition<Db.ProductionRun>
       production_usage: TableDefinition<Db.ProductionUsage>
       visit_plans: TableDefinition<Db.VisitPlan>

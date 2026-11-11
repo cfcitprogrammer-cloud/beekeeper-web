@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { VisitPlanForm } from "@/components/visits/visit-plan-form"
 import { PageHeader } from "@/components/shared/page-header"
-import { getVisitPlan } from "@/lib/data/operations"
+import { getVisitPlan, getVisits } from "@/lib/data/operations"
 
 export default async function EditVisitPlanPage({
   params,
@@ -13,17 +13,31 @@ export default async function EditVisitPlanPage({
 }) {
   const { id } = await params
   await requirePermission(PERMISSIONS.VISITS_UPDATE)
-  const planResult = await getVisitPlan(id)
+
+  const [planResult, visitsResult] = await Promise.all([
+    getVisitPlan(id),
+    getVisits(),
+  ])
   if (!planResult.data) notFound()
+
+  const plan = planResult.data
+  const visits = (visitsResult.data ?? []).filter(
+    (visit) => visit.employee_id === plan.employee_id
+  )
+
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Field operations"
         title="Edit visit plan"
-        description={`Update ${planResult.data.name}.`}
+        description={`Update ${plan.name}. Visit logs inside the new range are attached when you save.`}
         icon={Pencil}
       />
-      <VisitPlanForm plan={planResult.data} />
+      <VisitPlanForm
+        plan={plan}
+        visits={visits}
+        employeeId={plan.employee_id}
+      />
     </div>
   )
 }

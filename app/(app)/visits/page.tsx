@@ -2,8 +2,8 @@ import Link from "next/link"
 import {
   ArrowRight,
   CalendarClock,
+  CalendarPlus,
   CheckCircle2,
-  LogIn,
   MapPinOff,
   Route,
 } from "lucide-react"
@@ -26,7 +26,9 @@ export default async function VisitsPage() {
   const plans = plansResult.data ?? []
   const visits = visitsResult.data ?? []
   const todayKey = new Date().toISOString().slice(0, 10)
-  const todayVisits = visits.filter((visit) => visit.check_in_at.startsWith(todayKey))
+  const todayVisits = visits.filter(
+    (visit) => visit.start_date <= todayKey && visit.end_date >= todayKey
+  )
   const unplanned = visits.filter((visit) => !visit.is_planned)
   const activePlans = plans.filter((plan) =>
     ["draft", "active"].includes(plan.status.toLowerCase())
@@ -35,7 +37,7 @@ export default async function VisitsPage() {
   const sections = [
     {
       title: "Visit log",
-      description: "All recorded visits with their outlet, check-in, check-out and status.",
+      description: "Scheduled visits with their outlet, check-in, check-out and status.",
       href: "/visits/log",
       icon: Route,
       count: `${visits.length} visits`,
@@ -50,12 +52,12 @@ export default async function VisitsPage() {
       action: "Open plans",
     },
     {
-      title: "Check in",
-      description: "Record a visit at a specific outlet, with or without a plan.",
-      href: "/visits/check-in",
-      icon: LogIn,
-      count: `${todayVisits.length} today`,
-      action: "Check in now",
+      title: "Add visit",
+      description: "Schedule a visit at a specific outlet, with or without a plan.",
+      href: "/visits/add",
+      icon: CalendarPlus,
+      count: `${todayVisits.length} scheduled today`,
+      action: "Add visit",
     },
   ]
 
@@ -64,7 +66,7 @@ export default async function VisitsPage() {
       <PageHeader
         eyebrow="Field operations"
         title="Visits"
-        description="Plan visit date ranges, check in at outlets, and review the visit log."
+        description="Plan visit date ranges, schedule visits at outlets, and check in/out with a photo capture."
         icon={Route}
       />
 

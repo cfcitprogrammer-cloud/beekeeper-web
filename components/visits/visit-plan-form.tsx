@@ -2,27 +2,36 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, CalendarClock, Save } from "lucide-react"
 
 import { createVisitPlan, updateVisitPlan } from "@/actions/visit.action"
+import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
-import { humanize } from "@/lib/format"
+import { formatDate, formatTimeRange, humanize } from "@/lib/format"
 import { VISIT_PLAN_STATUSES } from "@/types/database"
-import type { VisitPlanWithRelations } from "@/lib/data/operations"
+import type {
+  VisitPlanWithRelations,
+  VisitWithRelations,
+} from "@/lib/data/operations"
 
 const today = () => new Date().toISOString().slice(0, 10)
 
 export function VisitPlanForm({
   plan,
+  visits = [],
+  employeeId,
 }: {
   plan?: VisitPlanWithRelations | null
+  visits?: VisitWithRelations[]
+  employeeId?: string
 }) {
   const router = useRouter()
   const editingId = plan?.id ?? null
+  const ownerId = plan?.employee_id ?? employeeId
   const [saving, setSaving] = React.useState(false)
   const [draft, setDraft] = React.useState({
     name: plan?.name ?? "",
@@ -32,11 +41,50 @@ export function VisitPlanForm({
     notes: plan?.notes ?? "",
   })
 
+  const rangeVisits = React.useMemo(() => {
+    if (!draft.startDate || !draft.endDate) return []
+    if (draft.endDate < draft.startDate) return []
+    return visits
+      .filter(
+        (visit) =>
+          (!ownerId || visit.employee_id === ownerId) &&
+          visit.status !== "cancelled" &&
+          visit.start_date <= draft.endDate &&
+          visit.end_date >= draft.startDate
+      )
+      .sort((a, b) =>
+        `${a.start_date} ${a.start_time ?? ""}`.localeCompare(
+          `${b.start_date} ${b.start_time ?? ""}`
+        )
+      )
+  }, [visits, ownerId, draft.startDate, draft.endDate])
+
+  function changeStartDate(value: string) {
+    setDraft((current) => ({
+      ...current,
+      startDate: value,
+      endDate: current.endDate < value ? value : current.endDate,
+    }))
+  }
+
   async function savePlan() {
     if (!draft.name.trim()) {
       toast.add({ type: "error", title: "A plan name is required" })
       return
     }
+    if (!draft.startDate || !draft.endDate) {
+      toast.add({ type: "error", title: "Start and end dates are required" })
+      return
+    }
+    if (draft.endDate < draft.startDate) {
+      toast.add({
+        type: "error",
+        title: "Invalid date range",
+        description: "The end date cannot be before the start date.",
+      })
+      return
+    }
+
     setSaving(true)
     const result = editingId
       ? await updateVisitPlan({
@@ -65,6 +113,10 @@ export function VisitPlanForm({
     toast.add({
       type: "success",
       title: editingId ? "Visit plan updated" : "Visit plan created",
+      description:
+        rangeVisits.length > 0
+          ? `${rangeVisits.length} visit log(s) in this range are attached to the plan.`
+          : "No visit logs fall inside this range yet.",
     })
     router.push(`/visits/plans/${editingId ?? result.data.id}`)
     router.refresh()
@@ -101,9 +153,7 @@ export function VisitPlanForm({
               id="visit-plan-start"
               type="date"
               value={draft.startDate}
-              onChange={(event) =>
-                setDraft({ ...draft, startDate: event.target.value })
-              }
+              onChange={(event) => changeStartDate(event.target.value)}
             />
           </div>
           <div className="space-y-1.5">
@@ -111,6 +161,7 @@ export function VisitPlanForm({
             <Input
               id="visit-plan-end"
               type="date"
+              min={draft.startDate}
               value={draft.endDate}
               onChange={(event) =>
                 setDraft({ ...draft, endDate: event.target.value })
@@ -146,10 +197,58 @@ export function VisitPlanForm({
             />
           </div>
         </div>
+
+        <div className="mt-5 rounded-md border">
+          <div className="flex items-center gap-2 border-b px-3 py-2 text-xs font-medium">
+            <CalendarClock className="size-3.5" />
+            Visit logs in this date range
+            <span className="ml-auto text-[0.625rem] font-normal text-muted-foreground">
+              {rangeVisits.length} visit{rangeVisits.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          {rangeVisits.length > 0 ? (
+            <div className="divide-y">
+              {rangeVisits.map((visit) => (
+                <div
+                  key={visit.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                >
+                  <div>
+                    <p className="text-xs font-medium">
+                      {visit.outlet?.name ?? "Unknown outlet"}
+                    </p>
+                    <p className="text-[0.625rem] text-muted-foreground">
+                      {formatDate(visit.start_date)} → {formatDate(visit.end_date)}
+                      {visit.start_time || visit.end_time
+                        ? ` · ${formatTimeRange(visit.start_time, visit.end_time)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {visit.plan_id === editingId ? (
+                      <span className="text-[0.625rem] text-muted-foreground">
+                        Attached
+                      </span>
+                    ) : null}
+                    <StatusBadge status={visit.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="px-3 py-3 text-[0.625rem] text-muted-foreground">
+              No visit logs fall inside the selected dates.
+            </p>
+          )}
+          <p className="border-t px-3 py-2 text-[0.625rem] text-muted-foreground">
+            All visit logs in this range are attached to this plan when you save.
+          </p>
+        </div>
+
         <p className="mt-3 text-[0.625rem] text-muted-foreground">
           {editingId
-            ? "A visit plan simply reserves a date range for an employee. Any outlet can be visited."
-            : "New visit plans start with the database default status. A plan does not reserve specific outlets."}
+            ? "Updating the date range re-syncs the visits attached to this plan."
+            : "New visit plans start with the database default status."}
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t pt-4">
           <Button

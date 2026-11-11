@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import {
   failure,
   getAuthorizedContext,
+  getAuthorizedContextAny,
   type ActionResult,
 } from "@/actions/helpers/context"
 import { logActivity } from "@/actions/helpers/activity"
@@ -388,7 +389,6 @@ export async function reorderProductionStages(
 export type CreateProductionRunInput = {
   pipelineId: string
   notes?: string
-  status?: string
 }
 
 export async function createProductionRun(
@@ -418,7 +418,6 @@ export async function createProductionRun(
 
   const year = new Date().getFullYear()
   const runNo = `PR-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`
-  const status = runStatus(input.status)
 
   const { data, error } = await supabase
     .from("production_runs")
@@ -427,8 +426,6 @@ export async function createProductionRun(
       workspace_id: workspaceId,
       pipeline_id: input.pipelineId,
       run_no: runNo,
-      status,
-      started_at: status === "in_progress" ? new Date().toISOString() : null,
       notes: input.notes?.trim() || null,
       created_by: userId,
     })
@@ -459,146 +456,208 @@ export async function createProductionRun(
   return { success: true, data }
 }
 
-export type RecordUsageInput = {
-  runId: string
+export type AssignStageSkusInput = {
   stageId: string
-  inputQuantity: number
-  outputQuantity: number
-  wasteQuantity?: number
-  uom?: string
-  notes?: string
+  skuIds: string[]
 }
 
-export async function recordProductionUsage(
-  input: RecordUsageInput
-): Promise<ActionResult<{ id: string; flowedToStageId: string | null }>> {
-  if (!input.runId || !input.stageId) {
-    return failure("Select a production run and stage.")
-  }
-  if (!Number.isFinite(input.inputQuantity) || input.inputQuantity < 0) {
-    return failure("Enter a valid input quantity.")
-  }
-  if (!Number.isFinite(input.outputQuantity) || input.outputQuantity < 0) {
-    return failure("Enter a valid output quantity.")
-  }
-  const waste = input.wasteQuantity ?? 0
-  if (!Number.isFinite(waste) || waste < 0) {
-    return failure("Enter a valid waste quantity.")
-  }
+export async function assignStageSkus(
+  input: AssignStageSkusInput
+): Promise<ActionResult<{ assigned: number; removed: number }>> {
+  if (!input.stageId) return failure("Select a production stage.")
 
   const authorized = await getAuthorizedContext(PERMISSIONS.PRODUCTION_UPDATE)
   if ("error" in authorized) return authorized.error
 
   const { supabase, companyId, workspaceId, userId } = authorized.context
 
-  const { data: run, error: runError } = await supabase
-    .from("production_runs")
-    .select("id, pipeline_id, status, run_no")
-    .eq("id", input.runId)
-    .eq("company_id", companyId)
-    .maybeSingle()
-  if (runError) return failure(runError.message)
-  if (!run) return failure("Production run not found in this company.")
-  if (run.status === "completed" || run.status === "cancelled") {
-    return failure("This production run is closed and cannot accept usage.")
-  }
-
   const { data: stage, error: stageError } = await supabase
     .from("production_stages")
-    .select("id, name, sequence, pipeline_id, output_uom")
+    .select("id, name")
     .eq("id", input.stageId)
     .eq("company_id", companyId)
     .maybeSingle()
   if (stageError) return failure(stageError.message)
   if (!stage) return failure("Production stage not found in this company.")
-  if (stage.pipeline_id !== run.pipeline_id) {
-    return failure("The selected stage does not belong to the run's pipeline.")
+
+  const skuIds = Array.from(
+    new Set(input.skuIds.map((id) => id.trim()).filter(Boolean))
+  )
+
+  if (skuIds.length > 0) {
+    const { data: skus, error: skuError } = await supabase
+      .from("skus")
+      .select("id")
+      .eq("company_id", companyId)
+      .in("id", skuIds)
+    if (skuError) return failure(skuError.message)
+    if ((skus?.length ?? 0) !== skuIds.length) {
+      return failure("One or more SKUs do not belong to this company.")
+    }
   }
 
-  const now = new Date().toISOString()
-  const { data: usage, error } = await supabase
-    .from("production_usage")
-    .upsert(
-      {
+  const { data: existing, error: existingError } = await supabase
+    .from("production_stage_skus")
+    .select("sku_id")
+    .eq("company_id", companyId)
+    .eq("stage_id", stage.id)
+  if (existingError) return failure(existingError.message)
+
+  const existingIds = new Set(
+    ((existing ?? []) as { sku_id: string }[]).map((row) => row.sku_id)
+  )
+  const selectedIds = new Set(skuIds)
+  const toAdd = skuIds.filter((id) => !existingIds.has(id))
+  const toRemove = Array.from(existingIds).filter((id) => !selectedIds.has(id))
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("production_stage_skus")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("stage_id", stage.id)
+      .in("sku_id", toRemove)
+    if (error) return failure(error.message)
+  }
+
+  if (toAdd.length > 0) {
+    const { error } = await supabase.from("production_stage_skus").insert(
+      toAdd.map((skuId) => ({
         company_id: companyId,
-        workspace_id: workspaceId,
-        pipeline_id: run.pipeline_id,
-        run_id: run.id,
         stage_id: stage.id,
-        input_quantity: input.inputQuantity,
-        output_quantity: input.outputQuantity,
-        waste_quantity: waste,
-        uom: input.uom?.trim() || stage.output_uom || null,
-        notes: input.notes?.trim() || null,
-        recorded_by: userId,
-        recorded_at: now,
-        updated_at: now,
-      },
-      { onConflict: "run_id,stage_id" }
+        sku_id: skuId,
+        assigned_by: userId,
+      }))
     )
+    if (error) return failure(error.message)
+  }
+
+  await logActivity(
+    supabase,
+    { companyId, workspaceId, userId },
+    authorized.context.employee?.id ?? null,
+    {
+      action: "update",
+      entityType: "production_stage",
+      entityId: stage.id,
+      summary: `Assigned ${skuIds.length} SKU(s) to stage ${stage.name}`,
+      metadata: {
+        assigned: toAdd.length,
+        removed: toRemove.length,
+      },
+    }
+  )
+
+  revalidatePath("/production")
+  revalidatePath("/production/stages")
+  revalidatePath(`/production/stages/${stage.id}/assign`)
+  revalidatePath("/feed")
+
+  return {
+    success: true,
+    data: { assigned: toAdd.length, removed: toRemove.length },
+  }
+}
+
+export type CreateUsageInput = {
+  pipelineId: string
+  stageId: string
+  skuId: string
+  quantity: number
+  uom?: string
+  usageDate?: string
+  notes?: string
+}
+
+export async function createProductionUsage(
+  input: CreateUsageInput
+): Promise<ActionResult<{ id: string }>> {
+  if (!input.pipelineId) return failure("Select a pipeline.")
+  if (!input.stageId) return failure("Select a production stage.")
+  if (!input.skuId) return failure("Select a SKU assigned to the stage.")
+  if (!Number.isFinite(input.quantity) || input.quantity < 0) {
+    return failure("Enter a valid usage quantity.")
+  }
+
+  const authorized = await getAuthorizedContextAny([
+    PERMISSIONS.PRODUCTION_CREATE,
+    PERMISSIONS.PRODUCTION_UPDATE,
+  ])
+  if ("error" in authorized) return authorized.error
+
+  const { supabase, companyId, workspaceId, userId } = authorized.context
+  if (!workspaceId) return failure("No workspace is associated with your account.")
+
+  const { data: stage, error: stageError } = await supabase
+    .from("production_stages")
+    .select("id, name, pipeline_id, output_uom")
+    .eq("id", input.stageId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+  if (stageError) return failure(stageError.message)
+  if (!stage) return failure("Production stage not found in this company.")
+  if (stage.pipeline_id !== input.pipelineId) {
+    return failure("The selected stage does not belong to that pipeline.")
+  }
+
+  const { data: pipeline, error: pipelineError } = await supabase
+    .from("production_pipelines")
+    .select("id")
+    .eq("id", input.pipelineId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+  if (pipelineError) return failure(pipelineError.message)
+  if (!pipeline) return failure("Production pipeline not found in this company.")
+
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("production_stage_skus")
+    .select("id, sku:skus(id, sku_code, name, uom)")
+    .eq("company_id", companyId)
+    .eq("stage_id", stage.id)
+    .eq("sku_id", input.skuId)
+    .maybeSingle()
+  if (assignmentError) return failure(assignmentError.message)
+  if (!assignment) {
+    return failure("That SKU is not assigned to the selected stage.")
+  }
+
+  const assignmentSku = assignment.sku as unknown as {
+    id: string
+    sku_code: string
+    name: string
+    uom: string | null
+  } | null
+
+  const now = new Date().toISOString()
+  const usageDate = input.usageDate?.trim() || now.slice(0, 10)
+
+  const { data, error } = await supabase
+    .from("production_usage")
+    .insert({
+      company_id: companyId,
+      workspace_id: workspaceId,
+      pipeline_id: input.pipelineId,
+      stage_id: stage.id,
+      sku_id: input.skuId,
+      quantity: input.quantity,
+      uom:
+        input.uom?.trim() ||
+        assignmentSku?.uom ||
+        stage.output_uom ||
+        null,
+      usage_date: usageDate,
+      notes: input.notes?.trim() || null,
+      submitted_by: userId,
+      recorded_by: userId,
+      recorded_at: now,
+      updated_at: now,
+    })
     .select("id")
     .single()
 
   if (error) {
-    console.error("[action:recordProductionUsage]", error)
+    console.error("[action:createProductionUsage]", error)
     return failure(error.message)
-  }
-
-  if (run.status === "planned") {
-    await supabase
-      .from("production_runs")
-      .update({ status: "in_progress", started_at: now, updated_at: now })
-      .eq("id", run.id)
-      .eq("company_id", companyId)
-  }
-
-  // Flow the output quantity into the next connected stage as its input.
-  const { data: nextStage } = await supabase
-    .from("production_stages")
-    .select("id, name")
-    .eq("pipeline_id", run.pipeline_id)
-    .eq("company_id", companyId)
-    .gt("sequence", stage.sequence)
-    .order("sequence", { ascending: true })
-    .limit(1)
-    .maybeSingle()
-
-  let flowedToStageId: string | null = null
-  if (nextStage) {
-    flowedToStageId = nextStage.id
-    const { data: nextUsage } = await supabase
-      .from("production_usage")
-      .select("id, output_quantity, waste_quantity")
-      .eq("run_id", run.id)
-      .eq("stage_id", nextStage.id)
-      .maybeSingle()
-
-    if (nextUsage) {
-      await supabase
-        .from("production_usage")
-        .update({
-          input_quantity: input.outputQuantity,
-          source_stage_id: stage.id,
-          updated_at: now,
-        })
-        .eq("id", nextUsage.id)
-    } else {
-      await supabase.from("production_usage").insert({
-        company_id: companyId,
-        workspace_id: workspaceId,
-        pipeline_id: run.pipeline_id,
-        run_id: run.id,
-        stage_id: nextStage.id,
-        source_stage_id: stage.id,
-        input_quantity: input.outputQuantity,
-        output_quantity: 0,
-        waste_quantity: 0,
-        uom: input.uom?.trim() || stage.output_uom || null,
-        notes: `Auto-flowed from ${stage.name}`,
-        recorded_by: userId,
-        recorded_at: now,
-      })
-    }
   }
 
   await logActivity(
@@ -607,23 +666,24 @@ export async function recordProductionUsage(
     authorized.context.employee?.id ?? null,
     {
       action: "usage",
-      entityType: "production_run",
-      entityId: run.id,
-      summary: `Recorded usage at ${stage.name} for ${run.run_no}`,
+      entityType: "production_usage",
+      entityId: data.id,
+      summary: `Recorded ${input.quantity} ${assignmentSku?.uom ?? ""} of ${assignmentSku?.name ?? "a SKU"} at ${stage.name}`.trim(),
       metadata: {
+        pipeline_id: input.pipelineId,
         stage_id: stage.id,
-        input_quantity: input.inputQuantity,
-        output_quantity: input.outputQuantity,
-        waste_quantity: waste,
-        flowed_to_stage_id: flowedToStageId,
+        sku_id: input.skuId,
+        quantity: input.quantity,
       },
     }
   )
 
   revalidatePath("/production")
+  revalidatePath("/production/usage")
+  revalidatePath("/production/stages")
   revalidatePath("/feed")
 
-  return { success: true, data: { id: usage.id, flowedToStageId } }
+  return { success: true, data: { id: data.id } }
 }
 
 export async function updateProductionRunStatus(

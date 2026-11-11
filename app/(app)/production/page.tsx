@@ -1,58 +1,195 @@
-import { Factory, FlaskConical, Play } from "lucide-react"
+import Link from "next/link"
+import {
+  ArrowRight,
+  Factory,
+  FlaskConical,
+  Layers,
+  Plus,
+  Tags,
+} from "lucide-react"
 
-import { ProductionManager } from "@/components/production/production-manager"
 import { MetricCard } from "@/components/shared/metric-card"
 import { PageHeader } from "@/components/shared/page-header"
+import { Button } from "@/components/ui/button"
 import { requirePermission } from "@/lib/auth/guards"
-import { PERMISSIONS } from "@/lib/auth/permissions"
-import { getProductionPipelines, getProductionUsage } from "@/lib/data/operations"
+import { hasAnyPermission, PERMISSIONS } from "@/lib/auth/permissions"
+import {
+  getProductionPipelines,
+  getProductionStages,
+  getProductionUsage,
+} from "@/lib/data/operations"
+import { formatDate, formatNumber } from "@/lib/format"
+
+const sections = [
+  {
+    title: "Pipelines",
+    description: "Create and edit production pipelines.",
+    href: "/production/pipelines",
+    icon: Factory,
+  },
+  {
+    title: "Stages",
+    description: "Order stages and assign the SKUs each one uses.",
+    href: "/production/stages",
+    icon: Layers,
+  },
+  {
+    title: "Usage",
+    description: "Review SKU-level usage submitted by your team.",
+    href: "/production/usage",
+    icon: FlaskConical,
+  },
+]
 
 export default async function ProductionPage() {
-  await requirePermission(PERMISSIONS.PRODUCTION_VIEW)
+  const access = await requirePermission(PERMISSIONS.PRODUCTION_VIEW)
 
-  const [pipelinesResult, usageResult] = await Promise.all([
+  const [pipelinesResult, stagesResult, usageResult] = await Promise.all([
     getProductionPipelines(),
+    getProductionStages(),
     getProductionUsage(),
   ])
 
   const pipelines = pipelinesResult.data
-  const runs = pipelines.flatMap((pipeline) => pipeline.runs)
-  const inProgress = runs.filter((run) => run.status === "in_progress")
+  const stages = stagesResult.data
+  const usage = usageResult.data
+  const canRecord = hasAnyPermission(access.permissions, [
+    PERMISSIONS.PRODUCTION_CREATE,
+    PERMISSIONS.PRODUCTION_UPDATE,
+  ])
+  const assignedSkus = new Set(
+    stages.flatMap((stage) => stage.skus.map((sku) => sku.id))
+  ).size
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Operations"
-        title="Production usage"
-        description="Ordered pipelines, connected stages and quantity flow from raw input to finished goods."
+        title="Production"
+        description="Pipelines, stages and SKU-level usage in one place."
         icon={Factory}
+        actions={
+          canRecord ? (
+            <Button size="sm" render={<Link href="/production/usage/new" />}>
+              <Plus />
+              Record usage
+            </Button>
+          ) : undefined
+        }
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Pipelines"
           value={pipelines.length}
-          hint={`${pipelines.reduce((sum, pipeline) => sum + pipeline.stages.length, 0)} stages`}
+          hint={`${pipelines.filter((pipeline) => pipeline.is_active).length} active`}
           icon={Factory}
           accent="primary"
         />
         <MetricCard
-          label="Runs in progress"
-          value={inProgress.length}
-          hint={`${runs.length} total runs`}
-          icon={Play}
+          label="Stages"
+          value={stages.length}
+          hint="Across all pipelines"
+          icon={Layers}
           accent="amber"
         />
         <MetricCard
-          label="Usage entries"
-          value={usageResult.data.length}
-          hint="Recorded stage quantities"
-          icon={FlaskConical}
+          label="Assigned SKUs"
+          value={assignedSkus}
+          hint="Available for stage usage"
+          icon={Tags}
           accent="emerald"
+        />
+        <MetricCard
+          label="Usage entries"
+          value={usage.length}
+          hint="Recorded submissions"
+          icon={FlaskConical}
+          accent="primary"
         />
       </div>
 
-      <ProductionManager pipelines={pipelines} />
+      <div className="grid gap-3 md:grid-cols-3">
+        {sections.map((section) => (
+          <Link
+            key={section.href}
+            href={section.href}
+            className="group rounded-xl border bg-card p-4 transition-colors hover:border-primary/40"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <section.icon className="size-4" />
+              </span>
+              <ArrowRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </div>
+            <p className="mt-3 text-sm font-semibold">{section.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {section.description}
+            </p>
+          </Link>
+        ))}
+      </div>
+
+      <div className="rounded-xl border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+          <div>
+            <p className="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
+              Recent usage
+            </p>
+            <p className="font-heading text-sm font-semibold">
+              Latest submissions
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href="/production/usage" />}
+          >
+            View all
+            <ArrowRight />
+          </Button>
+        </div>
+        <div className="divide-y">
+          {usage.length === 0 ? (
+            <p className="px-4 py-6 text-xs text-muted-foreground">
+              No production usage has been recorded yet.
+            </p>
+          ) : (
+            usage.slice(0, 5).map((entry) => (
+              <div
+                key={entry.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium">
+                    {entry.sku ? entry.sku.name : "Legacy run usage"} ·{" "}
+                    {entry.stage?.name ?? "Stage"}
+                  </p>
+                  <p className="text-[0.625rem] text-muted-foreground">
+                    {entry.pipeline?.name ?? "Pipeline"} ·{" "}
+                    {entry.submitter
+                      ? `${entry.submitter.first_name} ${entry.submitter.last_name}`
+                      : entry.submitted_by
+                        ? `User ${entry.submitted_by.slice(0, 8)}`
+                        : "Unknown user"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs tabular-nums">
+                    {formatNumber(entry.quantity)}{" "}
+                    <span className="text-muted-foreground">
+                      {entry.uom ?? ""}
+                    </span>
+                  </p>
+                  <p className="text-[0.625rem] text-muted-foreground">
+                    {formatDate(entry.usage_date)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -20,7 +20,7 @@ export default async function VisitPlanDetailPage({
       <PageHeader
         eyebrow="Field operations"
         title={planResult.data.name}
-        description="Visit plan details. This plan reserves dates only; outlets are chosen at check-in."
+        description="Visit plan details, including every visit scheduled inside the plan's date range."
         icon={CalendarClock}
       />
       <VisitPlanDetail plan={planResult.data} />

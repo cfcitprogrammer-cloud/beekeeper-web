@@ -20,7 +20,11 @@ export type ExpensePlanStatus = "draft" | "submitted" | "approved" | "rejected" 
 export type ExpenseStatus = "pending" | "approved" | "rejected" | "reimbursed" | "cancelled"
 export type ProductionRunStatus = "planned" | "in_progress" | "completed" | "cancelled"
 export type VisitPlanStatus = "draft" | "active" | "completed" | "cancelled"
-export type VisitStatus = "checked_in" | "checked_out" | "cancelled"
+export type VisitStatus =
+  | "scheduled"
+  | "checked_in"
+  | "checked_out"
+  | "cancelled"
 
 // GeoJSON polygon, positions are [longitude, latitude]
 export type GeoJsonPolygon = {
@@ -681,20 +685,33 @@ export type ProductionRun = {
   updated_at: string
 }
 
+export type ProductionStageSku = {
+  id: string
+  company_id: string
+  stage_id: string
+  sku_id: string
+  assigned_by: string | null
+  created_at: string
+}
+
 export type ProductionUsage = {
   id: string
   company_id: string
   workspace_id: string
   pipeline_id: string
-  run_id: string
+  run_id: string | null
   stage_id: string
   source_stage_id: string | null
+  sku_id: string | null
+  quantity: number
   input_quantity: number
   output_quantity: number
   waste_quantity: number
   uom: string | null
   notes: string | null
+  submitted_by: string | null
   recorded_by: string | null
+  usage_date: string
   recorded_at: string
   created_at: string
   updated_at: string
@@ -737,12 +754,18 @@ export type Visit = {
   plan_id: string | null
   is_planned: boolean
   planned_date: string | null
-  check_in_at: string
+  start_date: string
+  end_date: string
+  start_time: string | null
+  end_time: string | null
+  check_in_at: string | null
   check_out_at: string | null
   check_in_latitude: number | null
   check_in_longitude: number | null
   check_out_latitude: number | null
   check_out_longitude: number | null
+  check_in_photo_path: string | null
+  check_out_photo_path: string | null
   check_in_distance_m: number | null
   notes: string | null
   status: VisitStatus

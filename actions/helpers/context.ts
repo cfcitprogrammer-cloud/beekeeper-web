@@ -1,5 +1,9 @@
 import { getAccessContext } from "@/lib/auth/access"
-import { hasPermission, type PermissionKey } from "@/lib/auth/permissions"
+import {
+  hasAnyPermission,
+  hasPermission,
+  type PermissionKey,
+} from "@/lib/auth/permissions"
 
 export type ActionContext = {
   supabase: Awaited<ReturnType<typeof getAccessContext>>["supabase"]
@@ -66,6 +70,44 @@ export async function getAuthorizedContext(
   }
 
   if (!hasPermission(context.permissions, permission)) {
+    return {
+      error: failure("You do not have permission to perform this action."),
+    }
+  }
+
+  if (!context.companyId) {
+    return {
+      error: failure("No company is associated with your account."),
+    }
+  }
+
+  return {
+    context: {
+      ...context,
+      userId: context.userId,
+      companyId: context.companyId,
+    },
+  }
+}
+
+/**
+ * Like `getAuthorizedContext`, but passes when the role has any one of the
+ * supplied permissions. Use for actions shared by more than one capability.
+ */
+export async function getAuthorizedContextAny(
+  permissions: PermissionKey[]
+): Promise<
+  { context: AuthorizedActionContext } | { error: ActionResult<never> }
+> {
+  const context = await getActionContext()
+
+  if (!context.userId) {
+    return {
+      error: failure("You must be signed in to perform this action."),
+    }
+  }
+
+  if (!hasAnyPermission(context.permissions, permissions)) {
     return {
       error: failure("You do not have permission to perform this action."),
     }

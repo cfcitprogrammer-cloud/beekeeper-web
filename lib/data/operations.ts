@@ -10,7 +10,9 @@ import type {
   ProductionPipeline,
   ProductionRun,
   ProductionStage,
+  ProductionStageSku,
   ProductionUsage,
+  Sku,
   Visit,
   VisitPlan,
 } from "@/db/models/models"
@@ -180,6 +182,23 @@ export type ProductionPipelineWithRelations = ProductionPipeline & {
   runs: ProductionRun[]
 }
 
+export type ProductionSkuSummary = Pick<
+  Sku,
+  "id" | "sku_code" | "name" | "brand" | "uom" | "is_active"
+>
+
+export type ProductionStageWithRelations = ProductionStage & {
+  pipeline: Pick<ProductionPipeline, "id" | "name" | "code"> | null
+  skus: ProductionSkuSummary[]
+}
+
+export type ProductionUsageWithRelations = ProductionUsage & {
+  pipeline: Pick<ProductionPipeline, "id" | "name" | "code"> | null
+  stage: Pick<ProductionStage, "id" | "name" | "sequence"> | null
+  sku: ProductionSkuSummary | null
+  submitter: EmployeeSummary | null
+}
+
 export async function getProductionPipelines(): Promise<
   QueryResult<ProductionPipelineWithRelations[]>
 > {
@@ -209,15 +228,168 @@ export async function getProductionPipelines(): Promise<
   )
 }
 
-export async function getProductionUsage(): Promise<QueryResult<ProductionUsage[]>> {
+export async function getProductionStages(): Promise<
+  QueryResult<ProductionStageWithRelations[]>
+> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("production_usage")
-    .select("*")
-    .order("recorded_at", { ascending: true })
+  const [stagesResult, pipelinesResult, assignmentsResult, skusResult] =
+    await Promise.all([
+      supabase.from("production_stages").select("*").order("sequence"),
+      supabase.from("production_pipelines").select("id,name,code"),
+      supabase.from("production_stage_skus").select("*"),
+      supabase
+        .from("skus")
+        .select("id,sku_code,name,brand,uom,is_active"),
+    ])
 
-  logError("production-usage", error)
-  return empty((data as ProductionUsage[] | null) ?? [])
+  logError("production-stages", stagesResult.error)
+  logError("production-stages-pipelines", pipelinesResult.error)
+  logError("production-stage-skus", assignmentsResult.error)
+  logError("production-stage-sku-catalog", skusResult.error)
+  if (stagesResult.error || !stagesResult.data) return empty([])
+
+  const pipelines = new Map(
+    ((pipelinesResult.data ?? []) as Pick<
+      ProductionPipeline,
+      "id" | "name" | "code"
+    >[]).map((pipeline) => [pipeline.id, pipeline])
+  )
+  const skus = new Map(
+    ((skusResult.data ?? []) as ProductionSkuSummary[]).map((sku) => [
+      sku.id,
+      sku,
+    ])
+  )
+  const assignments = (assignmentsResult.data ?? []) as ProductionStageSku[]
+
+  return empty(
+    (stagesResult.data as ProductionStage[]).map((stage) => ({
+      ...stage,
+      pipeline: pipelines.get(stage.pipeline_id) ?? null,
+      skus: assignments
+        .filter((assignment) => assignment.stage_id === stage.id)
+        .map((assignment) => skus.get(assignment.sku_id))
+        .filter((sku): sku is ProductionSkuSummary => Boolean(sku)),
+    }))
+  )
+}
+
+export async function getProductionStage(
+  id: string
+): Promise<QueryResult<ProductionStageWithRelations | null>> {
+  const supabase = await createClient()
+  const [stageResult, assignmentsResult, skusResult] = await Promise.all([
+    supabase
+      .from("production_stages")
+      .select("*, pipeline:production_pipelines(id,name,code)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("production_stage_skus").select("*").eq("stage_id", id),
+    supabase.from("skus").select("id,sku_code,name,brand,uom,is_active"),
+  ])
+
+  logError("production-stage", stageResult.error)
+  logError("production-stage-skus", assignmentsResult.error)
+  logError("production-stage-sku-catalog", skusResult.error)
+  if (stageResult.error || !stageResult.data) return empty(null)
+
+  const stage = stageResult.data as ProductionStage & {
+    pipeline: Pick<ProductionPipeline, "id" | "name" | "code"> | null
+  }
+  const skus = new Map(
+    ((skusResult.data ?? []) as ProductionSkuSummary[]).map((sku) => [
+      sku.id,
+      sku,
+    ])
+  )
+  const assignments = (assignmentsResult.data ?? []) as ProductionStageSku[]
+
+  return empty({
+    ...stage,
+    skus: assignments
+      .map((assignment) => skus.get(assignment.sku_id))
+      .filter((sku): sku is ProductionSkuSummary => Boolean(sku)),
+  })
+}
+
+export async function getProductionUsage(): Promise<
+  QueryResult<ProductionUsageWithRelations[]>
+> {
+  const supabase = await createClient()
+  const [usageResult, pipelinesResult, stagesResult, skusResult] =
+    await Promise.all([
+      supabase
+        .from("production_usage")
+        .select("*")
+        .order("recorded_at", { ascending: false }),
+      supabase.from("production_pipelines").select("id,name,code"),
+      supabase.from("production_stages").select("id,name,sequence"),
+      supabase.from("skus").select("id,sku_code,name,brand,uom,is_active"),
+    ])
+
+  logError("production-usage", usageResult.error)
+  logError("production-usage-pipelines", pipelinesResult.error)
+  logError("production-usage-stages", stagesResult.error)
+  logError("production-usage-skus", skusResult.error)
+  if (usageResult.error || !usageResult.data) return empty([])
+
+  const usageRows = usageResult.data as ProductionUsage[]
+  const submitterIds = Array.from(
+    new Set(
+      usageRows
+        .map((usage) => usage.submitted_by ?? usage.recorded_by)
+        .filter((id): id is string => Boolean(id))
+    )
+  )
+
+  const employeesResult = submitterIds.length
+    ? await supabase
+        .from("employees")
+        .select("id,employee_no,first_name,last_name,email,user_id")
+        .in("user_id", submitterIds)
+    : { data: [], error: null }
+
+  logError("production-usage-employees", employeesResult.error)
+
+  const pipelines = new Map(
+    ((pipelinesResult.data ?? []) as Pick<
+      ProductionPipeline,
+      "id" | "name" | "code"
+    >[]).map((pipeline) => [pipeline.id, pipeline])
+  )
+  const stages = new Map(
+    ((stagesResult.data ?? []) as Pick<
+      ProductionStage,
+      "id" | "name" | "sequence"
+    >[]).map((stage) => [stage.id, stage])
+  )
+  const skus = new Map(
+    ((skusResult.data ?? []) as ProductionSkuSummary[]).map((sku) => [
+      sku.id,
+      sku,
+    ])
+  )
+  const employees = new Map(
+    ((employeesResult.data ?? []) as (EmployeeSummary & {
+      user_id: string | null
+    })[])
+      .filter((employee) => employee.user_id)
+      .map((employee) => [employee.user_id as string, employee])
+  )
+
+  return empty(
+    usageRows.map((usage) => ({
+      ...usage,
+      pipeline: pipelines.get(usage.pipeline_id) ?? null,
+      stage: stages.get(usage.stage_id) ?? null,
+      sku: usage.sku_id ? (skus.get(usage.sku_id) ?? null) : null,
+      submitter: usage.submitted_by
+        ? (employees.get(usage.submitted_by) ?? null)
+        : usage.recorded_by
+          ? (employees.get(usage.recorded_by) ?? null)
+          : null,
+    }))
+  )
 }
 
 export async function getProductionPipeline(
@@ -270,6 +442,7 @@ export async function getProductionRun(
 
 export type VisitPlanWithRelations = VisitPlan & {
   employee: EmployeeSummary | null
+  visits?: VisitWithRelations[]
 }
 
 export async function getVisitPlans(): Promise<QueryResult<VisitPlanWithRelations[]>> {
@@ -289,7 +462,9 @@ export async function getVisitPlan(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("visit_plans")
-    .select("*, employee:employees(id,employee_no,first_name,last_name,email)")
+    .select(
+      "*, employee:employees(id,employee_no,first_name,last_name,email), visits:visits(*, employee:employees(id,employee_no,first_name,last_name,email), outlet:outlets(id,code,name,address))"
+    )
     .eq("id", id)
     .maybeSingle()
 
@@ -309,7 +484,8 @@ export async function getVisits(): Promise<QueryResult<VisitWithRelations[]>> {
     .select(
       "*, employee:employees(id,employee_no,first_name,last_name,email), outlet:outlets(id,code,name,address)"
     )
-    .order("check_in_at", { ascending: false })
+    .order("start_date", { ascending: false })
+    .order("start_time", { ascending: false, nullsFirst: false })
 
   logError("visits", error)
   return empty((data as VisitWithRelations[] | null) ?? [])

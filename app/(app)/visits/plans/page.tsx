@@ -16,7 +16,7 @@ export default async function VisitPlansPage() {
       <PageHeader
         eyebrow="Field operations"
         title="Visit plans"
-        description="A visit plan reserves a date range for an employee. It has no target outlets; any outlet can be visited."
+        description="A visit plan reserves a date range for an employee. Visits inside the range are attached only when the plan is saved."
         icon={CalendarClock}
       />
       <VisitPlansManager plans={result.data ?? []} />

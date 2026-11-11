@@ -27,6 +27,19 @@ function dateError(startDate: string, endDate: string) {
   return null
 }
 
+function timeError(
+  startDate: string,
+  endDate: string,
+  startTime?: string,
+  endTime?: string
+) {
+  if (!startTime || !endTime) return null
+  if (startDate === endDate && endTime < startTime) {
+    return "The end time cannot be before the start time on the same day."
+  }
+  return null
+}
+
 function haversineMeters(
   lat1: number,
   lon1: number,
@@ -43,36 +56,71 @@ function haversineMeters(
   return Math.round(2 * radius * Math.asin(Math.sqrt(a)) * 100) / 100
 }
 
+function photoBelongsToVisit(
+  photoPath: string,
+  companyId: string,
+  visitId: string
+) {
+  return photoPath.startsWith(`${companyId}/${visitId}/`)
+}
+
 /**
- * A visit is planned when the employee has a draft/active visit plan covering
- * the visit date. Plans intentionally have no target-outlet list, so any
- * outlet works for a planned visit.
+ * Every visit scheduled inside a plan's date range is attached to that plan.
+ * Visits that were attached previously but now fall outside the range are
+ * detached. The database trigger re-validates the attachment.
  */
-async function findMatchingPlan(
+async function syncPlanVisits(
   supabase: ActionContext["supabase"],
   companyId: string,
-  employeeId: string,
-  date: string
-): Promise<string | null> {
-  const { data: plans, error } = await supabase
-    .from("visit_plans")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("employee_id", employeeId)
-    .in("status", ["draft", "active"])
-    .lte("start_date", date)
-    .gte("end_date", date)
-    .order("start_date", { ascending: false })
-    .limit(1)
+  plan: {
+    id: string
+    employee_id: string
+    start_date: string
+    end_date: string
+  }
+) {
+  const now = new Date().toISOString()
 
-  if (error || !plans || plans.length === 0) return null
-  return (plans[0] as { id: string }).id
+  const { error: detachError } = await supabase
+    .from("visits")
+    .update({
+      plan_id: null,
+      is_planned: false,
+      planned_date: null,
+      updated_at: now,
+    })
+    .eq("company_id", companyId)
+    .eq("plan_id", plan.id)
+
+  if (detachError) {
+    console.error("[action:syncPlanVisits:detach]", detachError)
+    return
+  }
+
+  const { error: attachError } = await supabase
+    .from("visits")
+    .update({
+      plan_id: plan.id,
+      is_planned: true,
+      planned_date: null,
+      updated_at: now,
+    })
+    .eq("company_id", companyId)
+    .eq("employee_id", plan.employee_id)
+    .gte("start_date", plan.start_date)
+    .lte("start_date", plan.end_date)
+    .neq("status", "cancelled")
+
+  if (attachError) {
+    console.error("[action:syncPlanVisits:attach]", attachError)
+  }
 }
 
 function revalidateVisitPages() {
   revalidatePath("/visits")
   revalidatePath("/visits/plans")
   revalidatePath("/visits/log")
+  revalidatePath("/visits/plans/[id]", "page")
   revalidatePath("/feed")
 }
 
@@ -125,6 +173,13 @@ export async function createVisitPlan(
     return failure(error.message)
   }
 
+  await syncPlanVisits(supabase, companyId, {
+    id: data.id,
+    employee_id: employee.id,
+    start_date: input.startDate,
+    end_date: input.endDate,
+  })
+
   await logActivity(
     supabase,
     { companyId, workspaceId: planWorkspaceId, userId },
@@ -170,13 +225,20 @@ export async function updateVisitPlan(
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
-    .select("id")
+    .select("id, employee_id")
     .single()
 
   if (error) {
     console.error("[action:updateVisitPlan]", error)
     return failure(error.message)
   }
+
+  await syncPlanVisits(supabase, companyId, {
+    id: data.id,
+    employee_id: data.employee_id,
+    start_date: input.startDate,
+    end_date: input.endDate,
+  })
 
   await logActivity(
     supabase,
@@ -192,7 +254,7 @@ export async function updateVisitPlan(
 
   revalidateVisitPages()
 
-  return { success: true, data }
+  return { success: true, data: { id: data.id } }
 }
 
 export async function deleteVisitPlan(
@@ -233,20 +295,33 @@ export async function deleteVisitPlan(
   return { success: true, data: { id } }
 }
 
-export type CheckInVisitInput = {
+export type CreateVisitInput = {
   outletId: string
-  latitude?: number
-  longitude?: number
+  startDate: string
+  endDate: string
+  startTime?: string
+  endTime?: string
   notes?: string
-  checkInAt?: string
 }
 
-export async function checkInVisit(
-  input: CheckInVisitInput
+/**
+ * Add a visit to the log before it happens. The visit starts with the database
+ * default status (`scheduled`); check-in and check-out happen later from the
+ * visit log, each with a required captured photo.
+ */
+export async function createVisit(
+  input: CreateVisitInput
 ): Promise<ActionResult<{ id: string; is_planned: boolean; plan_id: string | null }>> {
-  if (!input.outletId) {
-    return failure("Select an outlet.")
-  }
+  if (!input.outletId) return failure("Select an outlet.")
+  const rangeError = dateError(input.startDate, input.endDate)
+  if (rangeError) return failure(rangeError)
+  const timeRangeError = timeError(
+    input.startDate,
+    input.endDate,
+    input.startTime,
+    input.endTime
+  )
+  if (timeRangeError) return failure(timeRangeError)
 
   const authorized = await getAuthorizedContext(PERMISSIONS.VISITS_CREATE)
   if ("error" in authorized) return authorized.error
@@ -255,7 +330,7 @@ export async function checkInVisit(
     authorized.context
   if (!employee) {
     return failure(
-      "Your account is not linked to an employee record. Ask an administrator to link it before checking in."
+      "Your account is not linked to an employee record. Ask an administrator to link it before adding visits."
     )
   }
 
@@ -263,7 +338,7 @@ export async function checkInVisit(
 
   const { data: outlet, error: outletError } = await supabase
     .from("outlets")
-    .select("id, latitude, longitude")
+    .select("id")
     .eq("id", input.outletId)
     .eq("company_id", companyId)
     .maybeSingle()
@@ -271,32 +346,8 @@ export async function checkInVisit(
   if (outletError) return failure(outletError.message)
   if (!outlet) return failure("Outlet not found in this company.")
 
-  const checkInAt = input.checkInAt || new Date().toISOString()
-  const visitDate = checkInAt.slice(0, 10)
-  const planId = await findMatchingPlan(
-    supabase,
-    companyId,
-    employee.id,
-    visitDate
-  )
-  const isPlanned = planId !== null
-
-  let distance: number | null = null
-  if (
-    typeof input.latitude === "number" &&
-    typeof input.longitude === "number" &&
-    typeof outlet.latitude === "number" &&
-    typeof outlet.longitude === "number"
-  ) {
-    distance = haversineMeters(
-      input.latitude,
-      input.longitude,
-      outlet.latitude,
-      outlet.longitude
-    )
-  }
-
-  // Status is intentionally omitted: the database default applies on create.
+  // Status and classification are intentionally omitted: the database defaults
+  // and classification trigger decide them.
   const { data, error } = await supabase
     .from("visits")
     .insert({
@@ -304,13 +355,10 @@ export async function checkInVisit(
       workspace_id: visitWorkspaceId,
       employee_id: employee.id,
       outlet_id: input.outletId,
-      plan_id: planId,
-      is_planned: isPlanned,
-      planned_date: isPlanned ? visitDate : null,
-      check_in_at: checkInAt,
-      check_in_latitude: input.latitude ?? null,
-      check_in_longitude: input.longitude ?? null,
-      check_in_distance_m: distance,
+      start_date: input.startDate,
+      end_date: input.endDate,
+      start_time: input.startTime || null,
+      end_time: input.endTime || null,
       notes: input.notes?.trim() || null,
       created_by: userId,
     })
@@ -318,7 +366,7 @@ export async function checkInVisit(
     .single()
 
   if (error) {
-    console.error("[action:checkInVisit]", error)
+    console.error("[action:createVisit]", error)
     return failure(error.message)
   }
 
@@ -327,15 +375,16 @@ export async function checkInVisit(
     { companyId, workspaceId: visitWorkspaceId, userId },
     employee.id,
     {
-      action: "check_in",
+      action: "create",
       entityType: "visit",
       entityId: data.id,
-      summary: `${isPlanned ? "Planned" : "Unplanned"} visit check-in`,
+      summary: `Added ${data.is_planned ? "planned" : "unplanned"} visit`,
       metadata: {
         employee_id: employee.id,
         outlet_id: input.outletId,
-        plan_id: planId,
-        distance_m: distance,
+        plan_id: data.plan_id,
+        start_date: input.startDate,
+        end_date: input.endDate,
       },
     }
   )
@@ -345,10 +394,131 @@ export async function checkInVisit(
   return { success: true, data }
 }
 
+export type CheckInVisitInput = {
+  visitId: string
+  latitude: number
+  longitude: number
+  photoPath: string
+  notes?: string
+}
+
+function gpsError(latitude: number, longitude: number) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return "A GPS location is required."
+  }
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    return "The GPS location is invalid."
+  }
+  return null
+}
+
+export async function checkInVisit(
+  input: CheckInVisitInput
+): Promise<ActionResult<{ id: string }>> {
+  if (!input.visitId) return failure("Visit id is required.")
+  if (!input.photoPath) {
+    return failure("A check-in photo is required.")
+  }
+  const locationError = gpsError(input.latitude, input.longitude)
+  if (locationError) return failure(locationError)
+
+  const authorized = await getAuthorizedContext(PERMISSIONS.VISITS_CREATE)
+  if ("error" in authorized) return authorized.error
+
+  const { supabase, companyId, employee, permissions } = authorized.context
+  if (!photoBelongsToVisit(input.photoPath, companyId, input.visitId)) {
+    return failure("The check-in photo does not belong to this visit.")
+  }
+
+  const { data: visit, error: visitError } = await supabase
+    .from("visits")
+    .select("id, company_id, employee_id, outlet_id, check_in_at, start_date, status")
+    .eq("id", input.visitId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (visitError) return failure(visitError.message)
+  if (!visit) return failure("Visit not found in this company.")
+  if (visit.check_in_at) return failure("This visit has already been checked in.")
+  if (visit.status === "cancelled") return failure("This visit was cancelled.")
+
+  const isSelf = employee?.id === visit.employee_id
+  if (!isSelf && !hasPermission(permissions, PERMISSIONS.VISITS_UPDATE)) {
+    return failure("You do not have permission to check in this visit.")
+  }
+
+  const { data: outlet } = await supabase
+    .from("outlets")
+    .select("id, latitude, longitude")
+    .eq("id", visit.outlet_id)
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  let distance: number | null = null
+  if (
+    typeof outlet?.latitude === "number" &&
+    typeof outlet?.longitude === "number"
+  ) {
+    distance = haversineMeters(
+      input.latitude,
+      input.longitude,
+      outlet.latitude,
+      outlet.longitude
+    )
+  }
+
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from("visits")
+    .update({
+      check_in_at: now,
+      check_in_latitude: input.latitude,
+      check_in_longitude: input.longitude,
+      check_in_distance_m: distance,
+      check_in_photo_path: input.photoPath,
+      notes: input.notes?.trim() || null,
+      status: "checked_in",
+      updated_at: now,
+    })
+    .eq("id", input.visitId)
+    .eq("company_id", companyId)
+
+  if (error) {
+    console.error("[action:checkInVisit]", error)
+    return failure(error.message)
+  }
+
+  await logActivity(
+    supabase,
+    {
+      companyId,
+      workspaceId: authorized.context.workspaceId,
+      userId: authorized.context.userId,
+    },
+    employee?.id ?? null,
+    {
+      action: "check_in",
+      entityType: "visit",
+      entityId: input.visitId,
+      summary: "Checked in to a visit",
+      metadata: {
+        outlet_id: visit.outlet_id,
+        distance_m: distance,
+        photo_path: input.photoPath,
+      },
+    }
+  )
+
+  revalidateVisitPages()
+
+  return { success: true, data: { id: input.visitId } }
+}
+
 export type CheckOutVisitInput = {
   visitId: string
-  latitude?: number
-  longitude?: number
+  latitude: number
+  longitude: number
+  photoPath: string
   notes?: string
 }
 
@@ -356,14 +526,23 @@ export async function checkOutVisit(
   input: CheckOutVisitInput
 ): Promise<ActionResult<{ id: string }>> {
   if (!input.visitId) return failure("Visit id is required.")
+  if (!input.photoPath) {
+    return failure("A check-out photo is required.")
+  }
+  const locationError = gpsError(input.latitude, input.longitude)
+  if (locationError) return failure(locationError)
 
   const context = await getActionContext()
   if (!context.userId) return failure("You must be signed in.")
   if (!context.companyId) return failure("No company is associated with your account.")
 
+  if (!photoBelongsToVisit(input.photoPath, context.companyId, input.visitId)) {
+    return failure("The check-out photo does not belong to this visit.")
+  }
+
   const { data: visit, error: visitError } = await context.supabase
     .from("visits")
-    .select("id, company_id, employee_id, check_out_at, outlet_id")
+    .select("id, company_id, employee_id, check_in_at, check_out_at, outlet_id, status")
     .eq("id", input.visitId)
     .eq("company_id", context.companyId)
     .maybeSingle()
@@ -371,6 +550,8 @@ export async function checkOutVisit(
   if (visitError) return failure(visitError.message)
   if (!visit) return failure("Visit not found in this company.")
   if (visit.check_out_at) return failure("This visit has already been checked out.")
+  if (visit.status === "cancelled") return failure("This visit was cancelled.")
+  if (!visit.check_in_at) return failure("Check in to the visit before checking out.")
 
   const isSelf = context.employee?.id === visit.employee_id
   if (
@@ -385,8 +566,9 @@ export async function checkOutVisit(
     .from("visits")
     .update({
       check_out_at: now,
-      check_out_latitude: input.latitude ?? null,
-      check_out_longitude: input.longitude ?? null,
+      check_out_latitude: input.latitude,
+      check_out_longitude: input.longitude,
+      check_out_photo_path: input.photoPath,
       notes: input.notes?.trim() || null,
       status: "checked_out",
       updated_at: now,
@@ -412,7 +594,10 @@ export async function checkOutVisit(
       entityType: "visit",
       entityId: input.visitId,
       summary: "Checked out of a visit",
-      metadata: { outlet_id: visit.outlet_id },
+      metadata: {
+        outlet_id: visit.outlet_id,
+        photo_path: input.photoPath,
+      },
     }
   )
 

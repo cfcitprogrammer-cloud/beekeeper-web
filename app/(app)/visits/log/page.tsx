@@ -16,7 +16,7 @@ export default async function VisitLogPage() {
       <PageHeader
         eyebrow="Field operations"
         title="Visit log"
-        description="Every recorded visit. Visits are planned when the employee has a plan covering the visit date."
+        description="Every scheduled and recorded visit. Add visits, then check in and check out with a required camera capture."
         icon={Route}
       />
       <VisitLog visits={result.data ?? []} />

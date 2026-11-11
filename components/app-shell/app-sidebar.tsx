@@ -237,8 +237,8 @@ export const navSections: NavSection[] = [
             permission: PERMISSIONS.VISITS_VIEW,
           },
           {
-            title: "Check in",
-            href: "/visits/check-in",
+            title: "Add visit",
+            href: "/visits/add",
             permission: PERMISSIONS.VISITS_CREATE,
           },
         ],
@@ -276,6 +276,28 @@ export const navSections: NavSection[] = [
         href: "/production",
         icon: Factory,
         permission: PERMISSIONS.PRODUCTION_VIEW,
+        children: [
+          {
+            title: "Overview",
+            href: "/production",
+            permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
+          {
+            title: "Pipelines",
+            href: "/production/pipelines",
+            permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
+          {
+            title: "Stages",
+            href: "/production/stages",
+            permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
+          {
+            title: "Usage",
+            href: "/production/usage",
+            permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
+        ],
       },
       {
         title: "Inventory",

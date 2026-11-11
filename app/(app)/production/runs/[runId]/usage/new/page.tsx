@@ -1,15 +1,25 @@
-import { notFound } from "next/navigation"
-import { FlaskConical } from "lucide-react"
+import { redirect } from "next/navigation"
+
+import { requireAnyPermission } from "@/lib/auth/guards"
 import { PERMISSIONS } from "@/lib/auth/permissions"
-import { requirePermission } from "@/lib/auth/guards"
-import { UsageForm } from "@/components/production/usage-form"
-import { PageHeader } from "@/components/shared/page-header"
 import { getProductionRun } from "@/lib/data/operations"
 
-export default async function NewUsagePage({ params }: { params: Promise<{ runId: string }> }) {
+export default async function LegacyRunUsagePage({
+  params,
+}: {
+  params: Promise<{ runId: string }>
+}) {
+  await requireAnyPermission([
+    PERMISSIONS.PRODUCTION_CREATE,
+    PERMISSIONS.PRODUCTION_UPDATE,
+  ])
+
   const { runId } = await params
-  await requirePermission(PERMISSIONS.PRODUCTION_UPDATE)
   const result = await getProductionRun(runId)
-  if (!result.data) notFound()
-  return (<div className="space-y-5"><PageHeader eyebrow="Operations" title="Record production usage" description={`Run ${result.data.run_no}`} icon={FlaskConical} /><UsageForm run={result.data} /></div>)
+
+  redirect(
+    result.data
+      ? `/production/usage/new?pipelineId=${result.data.pipeline_id}`
+      : "/production/usage/new"
+  )
 }
