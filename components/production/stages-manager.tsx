@@ -83,16 +83,6 @@ export function StagesManager({
       ),
     },
     {
-      id: "uom",
-      header: "Units",
-      hideBelow: "lg",
-      cell: (row) => (
-        <span className="text-xs text-muted-foreground">
-          in {row.input_uom || "—"} / out {row.output_uom || "—"}
-        </span>
-      ),
-    },
-    {
       id: "skus",
       header: "Assigned SKUs",
       sortValue: (row) => row.skus.length,

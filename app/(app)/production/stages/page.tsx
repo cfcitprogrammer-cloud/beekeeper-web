@@ -27,7 +27,7 @@ export default async function ProductionStagesPage({
       <PageHeader
         eyebrow="Production"
         title="Stages"
-        description="Ordered pipeline stages, their units and the SKUs each stage can use."
+        description="Ordered pipeline stages and the SKUs each stage can use."
         icon={Layers}
       />
       <StagesManager

@@ -1,5 +1,6 @@
 import { FlaskConical } from "lucide-react"
 
+import { ProductionUsageStats } from "@/components/production/usage-stats"
 import { UsageManager } from "@/components/production/usage-manager"
 import { PageHeader } from "@/components/shared/page-header"
 import { requirePermission } from "@/lib/auth/guards"
@@ -19,10 +20,11 @@ export default async function ProductionUsagePage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Production"
-        title="Production usage"
+        title="All production usage"
         description="SKU-level usage recorded per pipeline stage, with the user who submitted it."
         icon={FlaskConical}
       />
+      <ProductionUsageStats usage={usageResult.data} />
       <UsageManager usage={usageResult.data} canRecord={canRecord} />
     </div>
   )

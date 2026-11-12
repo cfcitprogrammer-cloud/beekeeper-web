@@ -312,9 +312,9 @@ export async function getProductionStage(
   })
 }
 
-export async function getProductionUsage(): Promise<
-  QueryResult<ProductionUsageWithRelations[]>
-> {
+export async function getProductionUsage(
+  submittedBy?: string
+): Promise<QueryResult<ProductionUsageWithRelations[]>> {
   const supabase = await createClient()
   const [usageResult, pipelinesResult, stagesResult, skusResult] =
     await Promise.all([
@@ -333,7 +333,12 @@ export async function getProductionUsage(): Promise<
   logError("production-usage-skus", skusResult.error)
   if (usageResult.error || !usageResult.data) return empty([])
 
-  const usageRows = usageResult.data as ProductionUsage[]
+  const usageRows = (usageResult.data as ProductionUsage[]).filter(
+    (usage) =>
+      !submittedBy ||
+      usage.submitted_by === submittedBy ||
+      usage.recorded_by === submittedBy
+  )
   const submitterIds = Array.from(
     new Set(
       usageRows

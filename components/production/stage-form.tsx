@@ -29,8 +29,6 @@ export function StageForm({
   const [draft, setDraft] = React.useState({
     name: "",
     stageType: "processing",
-    inputUom: "",
-    outputUom: "",
     description: "",
   })
 
@@ -60,8 +58,6 @@ export function StageForm({
       pipelineId,
       name: draft.name,
       stageType: draft.stageType,
-      inputUom: draft.inputUom,
-      outputUom: draft.outputUom,
       description: draft.description,
     })
     setSaving(false)
@@ -149,28 +145,6 @@ export function StageForm({
                 setDraft({ ...draft, description: event.target.value })
               }
               placeholder="Optional"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="st-in">Input UOM</Label>
-            <Input
-              id="st-in"
-              value={draft.inputUom}
-              onChange={(event) =>
-                setDraft({ ...draft, inputUom: event.target.value })
-              }
-              placeholder="kg"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="st-out">Output UOM</Label>
-            <Input
-              id="st-out"
-              value={draft.outputUom}
-              onChange={(event) =>
-                setDraft({ ...draft, outputUom: event.target.value })
-              }
-              placeholder="L"
             />
           </div>
         </div>

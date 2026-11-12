@@ -702,6 +702,7 @@ export type ProductionUsage = {
   run_id: string | null
   stage_id: string
   source_stage_id: string | null
+  batch_id: string
   sku_id: string | null
   quantity: number
   input_quantity: number

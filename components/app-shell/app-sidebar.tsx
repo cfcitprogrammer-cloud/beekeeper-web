@@ -293,7 +293,12 @@ export const navSections: NavSection[] = [
             permission: PERMISSIONS.PRODUCTION_VIEW,
           },
           {
-            title: "Usage",
+            title: "My usage",
+            href: "/production/usage/my",
+            permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
+          {
+            title: "All usage",
             href: "/production/usage",
             permission: PERMISSIONS.PRODUCTION_VIEW,
           },

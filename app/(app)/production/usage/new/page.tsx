@@ -27,7 +27,7 @@ export default async function NewProductionUsagePage({
       <PageHeader
         eyebrow="Production"
         title="Record production usage"
-        description="Pick a pipeline, then a stage, then enter usage for a SKU assigned to that stage."
+        description="Pick a pipeline and stage, then enter quantities for one or more SKUs assigned to that stage."
         icon={FlaskConical}
       />
       <UsageForm

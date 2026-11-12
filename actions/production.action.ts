@@ -1,5 +1,6 @@
 "use server"
 
+import { randomUUID } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
 import {
@@ -172,8 +173,6 @@ export type AddStageInput = {
   pipelineId: string
   name: string
   stageType?: string
-  inputUom?: string
-  outputUom?: string
   description?: string
 }
 
@@ -216,8 +215,6 @@ export async function addProductionStage(
       name: input.name.trim(),
       sequence,
       stage_type: input.stageType?.trim() || "processing",
-      input_uom: input.inputUom?.trim() || null,
-      output_uom: input.outputUom?.trim() || null,
       description: input.description?.trim() || null,
     })
     .select("id, sequence")
@@ -265,8 +262,6 @@ export async function updateProductionStage(
     .update({
       name: input.name.trim(),
       stage_type: input.stageType?.trim() || "processing",
-      input_uom: input.inputUom?.trim() || null,
-      output_uom: input.outputUom?.trim() || null,
       description: input.description?.trim() || null,
       updated_at: new Date().toISOString(),
     })
@@ -551,6 +546,8 @@ export async function assignStageSkus(
   revalidatePath("/production")
   revalidatePath("/production/stages")
   revalidatePath(`/production/stages/${stage.id}/assign`)
+  revalidatePath("/production/usage")
+  revalidatePath("/production/usage/new")
   revalidatePath("/feed")
 
   return {
@@ -559,24 +556,37 @@ export async function assignStageSkus(
   }
 }
 
+export type CreateUsageItemInput = {
+  skuId: string
+  quantity: number
+}
+
 export type CreateUsageInput = {
   pipelineId: string
   stageId: string
-  skuId: string
-  quantity: number
-  uom?: string
   usageDate?: string
   notes?: string
+  items: CreateUsageItemInput[]
 }
 
 export async function createProductionUsage(
   input: CreateUsageInput
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ batchId: string; created: number }>> {
   if (!input.pipelineId) return failure("Select a pipeline.")
   if (!input.stageId) return failure("Select a production stage.")
-  if (!input.skuId) return failure("Select a SKU assigned to the stage.")
-  if (!Number.isFinite(input.quantity) || input.quantity < 0) {
-    return failure("Enter a valid usage quantity.")
+
+  const itemsBySku = new Map<string, number>()
+  for (const item of input.items ?? []) {
+    const skuId = item.skuId?.trim()
+    if (!skuId) continue
+    if (!Number.isFinite(item.quantity) || item.quantity < 0) {
+      return failure("Enter a valid usage quantity for every selected SKU.")
+    }
+    itemsBySku.set(skuId, (itemsBySku.get(skuId) ?? 0) + item.quantity)
+  }
+
+  if (itemsBySku.size === 0) {
+    return failure("Select at least one SKU assigned to the stage.")
   }
 
   const authorized = await getAuthorizedContextAny([
@@ -590,7 +600,7 @@ export async function createProductionUsage(
 
   const { data: stage, error: stageError } = await supabase
     .from("production_stages")
-    .select("id, name, pipeline_id, output_uom")
+    .select("id, name, pipeline_id")
     .eq("id", input.stageId)
     .eq("company_id", companyId)
     .maybeSingle()
@@ -609,51 +619,57 @@ export async function createProductionUsage(
   if (pipelineError) return failure(pipelineError.message)
   if (!pipeline) return failure("Production pipeline not found in this company.")
 
-  const { data: assignment, error: assignmentError } = await supabase
+  const skuIds = Array.from(itemsBySku.keys())
+  const { data: assignments, error: assignmentError } = await supabase
     .from("production_stage_skus")
-    .select("id, sku:skus(id, sku_code, name, uom)")
+    .select("sku_id, sku:skus(id, sku_code, name, uom)")
     .eq("company_id", companyId)
     .eq("stage_id", stage.id)
-    .eq("sku_id", input.skuId)
-    .maybeSingle()
+    .in("sku_id", skuIds)
   if (assignmentError) return failure(assignmentError.message)
-  if (!assignment) {
-    return failure("That SKU is not assigned to the selected stage.")
-  }
 
-  const assignmentSku = assignment.sku as unknown as {
-    id: string
-    sku_code: string
-    name: string
-    uom: string | null
-  } | null
+  const assignedSkus = new Map(
+    ((assignments ?? []) as unknown as {
+      sku_id: string
+      sku: {
+        id: string
+        sku_code: string
+        name: string
+        uom: string | null
+      } | null
+    }[]).map((assignment) => [assignment.sku_id, assignment.sku])
+  )
+
+  if (assignedSkus.size !== skuIds.length) {
+    return failure("One or more selected SKUs are not assigned to this stage.")
+  }
 
   const now = new Date().toISOString()
   const usageDate = input.usageDate?.trim() || now.slice(0, 10)
+  const batchId = randomUUID()
+  const notes = input.notes?.trim() || null
 
   const { data, error } = await supabase
     .from("production_usage")
-    .insert({
-      company_id: companyId,
-      workspace_id: workspaceId,
-      pipeline_id: input.pipelineId,
-      stage_id: stage.id,
-      sku_id: input.skuId,
-      quantity: input.quantity,
-      uom:
-        input.uom?.trim() ||
-        assignmentSku?.uom ||
-        stage.output_uom ||
-        null,
-      usage_date: usageDate,
-      notes: input.notes?.trim() || null,
-      submitted_by: userId,
-      recorded_by: userId,
-      recorded_at: now,
-      updated_at: now,
-    })
+    .insert(
+      skuIds.map((skuId) => ({
+        company_id: companyId,
+        workspace_id: workspaceId,
+        pipeline_id: input.pipelineId,
+        stage_id: stage.id,
+        batch_id: batchId,
+        sku_id: skuId,
+        quantity: itemsBySku.get(skuId) ?? 0,
+        uom: assignedSkus.get(skuId)?.uom || null,
+        usage_date: usageDate,
+        notes,
+        submitted_by: userId,
+        recorded_by: userId,
+        recorded_at: now,
+        updated_at: now,
+      }))
+    )
     .select("id")
-    .single()
 
   if (error) {
     console.error("[action:createProductionUsage]", error)
@@ -667,23 +683,31 @@ export async function createProductionUsage(
     {
       action: "usage",
       entityType: "production_usage",
-      entityId: data.id,
-      summary: `Recorded ${input.quantity} ${assignmentSku?.uom ?? ""} of ${assignmentSku?.name ?? "a SKU"} at ${stage.name}`.trim(),
+      entityId: batchId,
+      summary: `Recorded usage for ${skuIds.length} SKU(s) at ${stage.name}`,
       metadata: {
         pipeline_id: input.pipelineId,
         stage_id: stage.id,
-        sku_id: input.skuId,
-        quantity: input.quantity,
+        batch_id: batchId,
+        items: skuIds.map((skuId) => ({
+          sku_id: skuId,
+          quantity: itemsBySku.get(skuId) ?? 0,
+          uom: assignedSkus.get(skuId)?.uom ?? null,
+        })),
       },
     }
   )
 
   revalidatePath("/production")
   revalidatePath("/production/usage")
+  revalidatePath("/production/usage/my")
   revalidatePath("/production/stages")
   revalidatePath("/feed")
 
-  return { success: true, data: { id: data.id } }
+  return {
+    success: true,
+    data: { batchId, created: data?.length ?? skuIds.length },
+  }
 }
 
 export async function updateProductionRunStatus(

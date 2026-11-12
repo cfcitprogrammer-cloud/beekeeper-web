@@ -6,6 +6,7 @@ import {
   Layers,
   Plus,
   Tags,
+  UserRound,
 } from "lucide-react"
 
 import { MetricCard } from "@/components/shared/metric-card"
@@ -18,7 +19,8 @@ import {
   getProductionStages,
   getProductionUsage,
 } from "@/lib/data/operations"
-import { formatDate, formatNumber } from "@/lib/format"
+import { groupProductionUsage } from "@/lib/production/usage"
+import { formatDate } from "@/lib/format"
 
 const sections = [
   {
@@ -34,7 +36,13 @@ const sections = [
     icon: Layers,
   },
   {
-    title: "Usage",
+    title: "My usage",
+    description: "See the usage entries you submitted.",
+    href: "/production/usage/my",
+    icon: UserRound,
+  },
+  {
+    title: "All usage",
     description: "Review SKU-level usage submitted by your team.",
     href: "/production/usage",
     icon: FlaskConical,
@@ -60,6 +68,7 @@ export default async function ProductionPage() {
   const assignedSkus = new Set(
     stages.flatMap((stage) => stage.skus.map((sku) => sku.id))
   ).size
+  const usageBatches = groupProductionUsage(usage)
 
   return (
     <div className="space-y-5">
@@ -102,14 +111,14 @@ export default async function ProductionPage() {
         />
         <MetricCard
           label="Usage entries"
-          value={usage.length}
-          hint="Recorded submissions"
+          value={usageBatches.length}
+          hint={`${usage.length} SKU lines`}
           icon={FlaskConical}
           accent="primary"
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {sections.map((section) => (
           <Link
             key={section.href}
@@ -150,39 +159,39 @@ export default async function ProductionPage() {
           </Button>
         </div>
         <div className="divide-y">
-          {usage.length === 0 ? (
+          {usageBatches.length === 0 ? (
             <p className="px-4 py-6 text-xs text-muted-foreground">
               No production usage has been recorded yet.
             </p>
           ) : (
-            usage.slice(0, 5).map((entry) => (
+            usageBatches.slice(0, 5).map((batch) => (
               <div
-                key={entry.id}
+                key={batch.id}
                 className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
               >
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium">
-                    {entry.sku ? entry.sku.name : "Legacy run usage"} ·{" "}
-                    {entry.stage?.name ?? "Stage"}
+                    {batch.items
+                      .map((item) => item.sku?.name ?? "Legacy run usage")
+                      .join(", ")}{" "}
+                    · {batch.stage?.name ?? "Stage"}
                   </p>
                   <p className="text-[0.625rem] text-muted-foreground">
-                    {entry.pipeline?.name ?? "Pipeline"} ·{" "}
-                    {entry.submitter
-                      ? `${entry.submitter.first_name} ${entry.submitter.last_name}`
-                      : entry.submitted_by
-                        ? `User ${entry.submitted_by.slice(0, 8)}`
+                    {batch.pipeline?.name ?? "Pipeline"} ·{" "}
+                    {batch.submitter
+                      ? `${batch.submitter.first_name} ${batch.submitter.last_name}`
+                      : batch.submittedBy
+                        ? `User ${batch.submittedBy.slice(0, 8)}`
                         : "Unknown user"}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs tabular-nums">
-                    {formatNumber(entry.quantity)}{" "}
-                    <span className="text-muted-foreground">
-                      {entry.uom ?? ""}
-                    </span>
+                    {batch.items.length} SKU line
+                    {batch.items.length === 1 ? "" : "s"}
                   </p>
                   <p className="text-[0.625rem] text-muted-foreground">
-                    {formatDate(entry.usage_date)}
+                    {formatDate(batch.usageDate)}
                   </p>
                 </div>
               </div>

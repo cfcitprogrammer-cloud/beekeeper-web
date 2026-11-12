@@ -610,6 +610,7 @@ export interface ProductionUsage {
   run_id: UUID | null
   stage_id: UUID
   source_stage_id: UUID | null
+  batch_id: UUID
   sku_id: UUID | null
   quantity: number
   input_quantity: number

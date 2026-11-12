@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
 import { FlaskConical, Plus } from "lucide-react"
 
@@ -7,22 +8,30 @@ import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { Button } from "@/components/ui/button"
 import { formatDate, formatNumber } from "@/lib/format"
 import type { ProductionUsageWithRelations } from "@/lib/data/operations"
+import {
+  groupProductionUsage,
+  type ProductionUsageBatch,
+} from "@/lib/production/usage"
 
 export function UsageManager({
   usage,
   canRecord,
+  recordHref = "/production/usage/new",
 }: {
   usage: ProductionUsageWithRelations[]
   canRecord: boolean
+  recordHref?: string
 }) {
-  const columns: DataTableColumn<ProductionUsageWithRelations>[] = [
+  const batches = React.useMemo(() => groupProductionUsage(usage), [usage])
+
+  const columns: DataTableColumn<ProductionUsageBatch>[] = [
     {
       id: "date",
       header: "Date",
-      sortValue: (row) => row.usage_date,
+      sortValue: (row) => row.usageDate,
       cell: (row) => (
         <span className="text-xs tabular-nums">
-          {formatDate(row.usage_date)}
+          {formatDate(row.usageDate)}
         </span>
       ),
     },
@@ -45,33 +54,44 @@ export function UsageManager({
       ),
     },
     {
-      id: "sku",
-      header: "SKU",
-      sortValue: (row) => row.sku?.sku_code ?? "",
-      cell: (row) =>
-        row.sku ? (
-          <div>
-            <p className="text-xs">{row.sku.name}</p>
-            <p className="font-mono text-[0.625rem] text-muted-foreground">
-              {row.sku.sku_code}
-            </p>
-          </div>
-        ) : (
-          <span className="text-[0.625rem] text-muted-foreground">
-            No SKU (legacy run usage)
-          </span>
-        ),
+      id: "skus",
+      header: "SKUs",
+      sortValue: (row) =>
+        row.items
+          .map((item) => item.sku?.sku_code ?? "")
+          .join(" "),
+      cell: (row) => (
+        <div className="space-y-1">
+          {row.items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between gap-3 text-xs"
+            >
+              <span className="min-w-0 truncate">
+                {item.sku ? item.sku.name : "Legacy run usage"}
+                {item.sku ? (
+                  <span className="ml-1 font-mono text-[0.625rem] text-muted-foreground">
+                    {item.sku.sku_code}
+                  </span>
+                ) : null}
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {formatNumber(item.quantity)}{" "}
+                <span className="text-muted-foreground">{item.uom ?? ""}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ),
     },
     {
-      id: "quantity",
-      header: "Quantity",
+      id: "items",
+      header: "Lines",
       align: "right",
-      sortValue: (row) => row.quantity,
+      hideBelow: "sm",
+      sortValue: (row) => row.items.length,
       cell: (row) => (
-        <span className="text-xs tabular-nums">
-          {formatNumber(row.quantity)}{" "}
-          <span className="text-muted-foreground">{row.uom ?? ""}</span>
-        </span>
+        <span className="text-xs tabular-nums">{row.items.length}</span>
       ),
     },
     {
@@ -87,8 +107,8 @@ export function UsageManager({
           <p className="text-xs">
             {row.submitter
               ? `${row.submitter.first_name} ${row.submitter.last_name}`
-              : row.submitted_by
-                ? `User ${row.submitted_by.slice(0, 8)}`
+              : row.submittedBy
+                ? `User ${row.submittedBy.slice(0, 8)}`
                 : "Unknown user"}
           </p>
           <p className="text-[0.625rem] text-muted-foreground">
@@ -111,7 +131,7 @@ export function UsageManager({
 
   return (
     <DataTable
-      data={usage}
+      data={batches}
       columns={columns}
       getRowId={(row) => row.id}
       searchable={(row) =>
@@ -119,12 +139,14 @@ export function UsageManager({
           row.pipeline?.name,
           row.pipeline?.code,
           row.stage?.name,
-          row.sku?.name,
-          row.sku?.sku_code,
           row.submitter?.first_name,
           row.submitter?.last_name,
           row.submitter?.employee_no,
           row.notes,
+          ...row.items.flatMap((item) => [
+            item.sku?.name,
+            item.sku?.sku_code,
+          ]),
         ]
           .filter(Boolean)
           .join(" ")
@@ -137,7 +159,7 @@ export function UsageManager({
       initialSort={{ id: "date", desc: true }}
       toolbar={
         canRecord ? (
-          <Button size="sm" render={<Link href="/production/usage/new" />}>
+          <Button size="sm" render={<Link href={recordHref} />}>
             <Plus />
             New usage
           </Button>
