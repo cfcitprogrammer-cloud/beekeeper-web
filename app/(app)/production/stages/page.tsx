@@ -14,13 +14,13 @@ export default async function ProductionStagesPage({
 }: {
   searchParams: Promise<{ pipelineId?: string }>
 }) {
-  const access = await requirePermission(PERMISSIONS.PRODUCTION_VIEW)
-
-  const { pipelineId } = await searchParams
-  const [stagesResult, pipelinesResult] = await Promise.all([
-    getProductionStages(),
-    getProductionPipelines(),
-  ])
+  const [access, { pipelineId }, stagesResult, pipelinesResult] =
+    await Promise.all([
+      requirePermission(PERMISSIONS.PRODUCTION_VIEW),
+      searchParams,
+      getProductionStages(),
+      getProductionPipelines(),
+    ])
 
   return (
     <div className="space-y-5">

@@ -18,12 +18,13 @@ import {
 } from "@/actions/feed.action"
 
 export default async function FeedPage() {
-  await requirePermission(PERMISSIONS.FEED_VIEW)
-
-  const [feedResult, monitoringResult] = await Promise.all([
+  const t0 = performance.now()
+  const [, feedResult, monitoringResult] = await Promise.all([
+    requirePermission(PERMISSIONS.FEED_VIEW),
     getActivityFeed(100),
     getMonitoringSnapshot(),
   ])
+  console.log("[tmp-feed-page] data resolved in", Math.round(performance.now() - t0), "ms")
 
   const feed = feedResult.success ? feedResult.data : []
   const workspaces = monitoringResult.success ? monitoringResult.data : []

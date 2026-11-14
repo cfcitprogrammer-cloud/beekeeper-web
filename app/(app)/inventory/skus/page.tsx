@@ -9,9 +9,8 @@ import { getSkuCategories, getSkus } from "@/lib/data/queries"
 import { formatCurrency } from "@/lib/format"
 
 export default async function SkuCatalogPage() {
-  await requirePermission(PERMISSIONS.INVENTORY_VIEW)
-
-  const [skusResult, categoriesResult] = await Promise.all([
+  const [, skusResult, categoriesResult] = await Promise.all([
+    requirePermission(PERMISSIONS.INVENTORY_VIEW),
     getSkus(),
     getSkuCategories(),
   ])

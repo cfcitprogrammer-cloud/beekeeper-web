@@ -316,21 +316,30 @@ export async function getProductionUsage(
   submittedBy?: string
 ): Promise<QueryResult<ProductionUsageWithRelations[]>> {
   const supabase = await createClient()
-  const [usageResult, pipelinesResult, stagesResult, skusResult] =
-    await Promise.all([
-      supabase
-        .from("production_usage")
-        .select("*")
-        .order("recorded_at", { ascending: false }),
-      supabase.from("production_pipelines").select("id,name,code"),
-      supabase.from("production_stages").select("id,name,sequence"),
-      supabase.from("skus").select("id,sku_code,name,brand,uom,is_active"),
-    ])
+  const [
+    usageResult,
+    pipelinesResult,
+    stagesResult,
+    skusResult,
+    employeesResult,
+  ] = await Promise.all([
+    supabase
+      .from("production_usage")
+      .select("*")
+      .order("recorded_at", { ascending: false }),
+    supabase.from("production_pipelines").select("id,name,code"),
+    supabase.from("production_stages").select("id,name,sequence"),
+    supabase.from("skus").select("id,sku_code,name,brand,uom,is_active"),
+    supabase
+      .from("employees")
+      .select("id,employee_no,first_name,last_name,email,user_id"),
+  ])
 
   logError("production-usage", usageResult.error)
   logError("production-usage-pipelines", pipelinesResult.error)
   logError("production-usage-stages", stagesResult.error)
   logError("production-usage-skus", skusResult.error)
+  logError("production-usage-employees", employeesResult.error)
   if (usageResult.error || !usageResult.data) return empty([])
 
   const usageRows = (usageResult.data as ProductionUsage[]).filter(
@@ -339,22 +348,6 @@ export async function getProductionUsage(
       usage.submitted_by === submittedBy ||
       usage.recorded_by === submittedBy
   )
-  const submitterIds = Array.from(
-    new Set(
-      usageRows
-        .map((usage) => usage.submitted_by ?? usage.recorded_by)
-        .filter((id): id is string => Boolean(id))
-    )
-  )
-
-  const employeesResult = submitterIds.length
-    ? await supabase
-        .from("employees")
-        .select("id,employee_no,first_name,last_name,email,user_id")
-        .in("user_id", submitterIds)
-    : { data: [], error: null }
-
-  logError("production-usage-employees", employeesResult.error)
 
   const pipelines = new Map(
     ((pipelinesResult.data ?? []) as Pick<

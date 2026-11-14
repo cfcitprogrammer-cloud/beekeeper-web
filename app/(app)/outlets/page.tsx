@@ -8,9 +8,10 @@ import { PageHeader } from "@/components/shared/page-header"
 import { getOutlets } from "@/lib/data/queries"
 
 export default async function OutletsPage() {
-  await requirePermission(PERMISSIONS.OUTLETS_VIEW)
-
-  const result = await getOutlets()
+  const [, result] = await Promise.all([
+    requirePermission(PERMISSIONS.OUTLETS_VIEW),
+    getOutlets(),
+  ])
   const outlets = result.data
 
   const active = outlets.filter((outlet) => outlet.status === "ACTIVE")

@@ -8,9 +8,8 @@ import { PageHeader } from "@/components/shared/page-header"
 import { getDepartments, getEmployees } from "@/lib/data/queries"
 
 export default async function EmployeesPage() {
-  await requirePermission(PERMISSIONS.EMPLOYEES_VIEW)
-
-  const [employeesResult, departmentsResult] = await Promise.all([
+  const [, employeesResult, departmentsResult] = await Promise.all([
+    requirePermission(PERMISSIONS.EMPLOYEES_VIEW),
     getEmployees(),
     getDepartments(),
   ])

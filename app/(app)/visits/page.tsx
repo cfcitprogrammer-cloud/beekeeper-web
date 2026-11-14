@@ -16,9 +16,8 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { getVisitPlans, getVisits } from "@/lib/data/operations"
 
 export default async function VisitsPage() {
-  await requirePermission(PERMISSIONS.VISITS_VIEW)
-
-  const [plansResult, visitsResult] = await Promise.all([
+  const [, plansResult, visitsResult] = await Promise.all([
+    requirePermission(PERMISSIONS.VISITS_VIEW),
     getVisitPlans(),
     getVisits(),
   ])

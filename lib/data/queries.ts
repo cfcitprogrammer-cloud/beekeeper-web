@@ -244,17 +244,18 @@ function snapshotNumber(snapshot: unknown, keys: string[]): number {
   return 0
 }
 
-async function getEmployeeNamesByUserId(
-  userIds: string[]
-): Promise<Map<string, string>> {
+/**
+ * Requester names for approval views. Loaded once per request and shared by
+ * every approval query, so the name lookup runs in parallel with the approval
+ * query instead of adding a second sequential round trip.
+ */
+const getEmployeeNameMap = cache(async (): Promise<Map<string, string>> => {
   const names = new Map<string, string>()
-  if (userIds.length === 0) return names
 
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("employees")
     .select("user_id, first_name, last_name")
-    .in("user_id", userIds)
 
   logError("employee-names", error)
 
@@ -269,7 +270,170 @@ async function getEmployeeNamesByUserId(
   }
 
   return names
+})
+
+/* -------------------------------------------------------------------------- */
+/*                                 Dashboard                                  */
+/* -------------------------------------------------------------------------- */
+
+export type DashboardBookingItem = {
+  id: string
+  booking_no: string
+  booking_date: string
+  total: number
+  line_count: number
+  status: BookingWithRelations["status"]
+  outlet: { name: string; address: string | null; code: string }
 }
+
+export type DashboardLeaveItem = {
+  id: string
+  start_date: string
+  days_count: number
+  employee: { first_name: string; last_name: string }
+  leave_type: { code: string }
+}
+
+export type DashboardSnapshot = {
+  employees: { status: Employee["status"] }[]
+  attendance: { first_in: string | null }[]
+  bookings: { status: BookingWithRelations["status"] }[]
+  latestBookings: DashboardBookingItem[]
+  outlets: { status: OutletWithRelations["status"] }[]
+  upcomingLeave: DashboardLeaveItem[]
+  pendingLeave: number
+}
+
+/**
+ * Minimal projection of the data the dashboard actually renders.
+ *
+ * The dashboard only needs status tallies plus a short "latest" list. Loading
+ * full tables (employees, bookings, leave requests, attendance joins) just to
+ * count them makes the page slower as the workspace grows, so this snapshot
+ * selects only the columns used by the cards.
+ */
+export const getDashboardSnapshot = cache(
+  async (): Promise<QueryResult<DashboardSnapshot>> => {
+    const supabase = await createClient()
+
+    const [
+      employeeResult,
+      attendanceResult,
+      bookingStatusResult,
+      latestBookingResult,
+      outletResult,
+      upcomingLeaveResult,
+      leaveTypeResult,
+      pendingLeaveResult,
+    ] = await Promise.all([
+      supabase.from("employees").select("id, first_name, last_name, status"),
+      supabase.from("attendance_daily").select("first_in"),
+      supabase.from("bookings").select("status"),
+      supabase
+        .from("bookings")
+        .select(
+          "id, booking_no, booking_date, total, line_count, status, outlet_id"
+        )
+        .order("booking_date", { ascending: false })
+        .limit(5),
+      supabase
+        .from("outlets")
+        .select("id, name, address, code, status, is_active"),
+      supabase
+        .from("leave_requests")
+        .select("id, start_date, days, employee_id, leave_type_id")
+        .eq("status", "approved")
+        .order("start_date", { ascending: true })
+        .limit(4),
+      supabase.from("leave_types").select("id, code"),
+      supabase
+        .from("leave_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
+    ])
+
+    logError("dashboard-employees", employeeResult.error)
+    logError("dashboard-attendance", attendanceResult.error)
+    logError("dashboard-booking-status", bookingStatusResult.error)
+    logError("dashboard-latest-bookings", latestBookingResult.error)
+    logError("dashboard-outlets", outletResult.error)
+    logError("dashboard-upcoming-leave", upcomingLeaveResult.error)
+    logError("dashboard-leave-types", leaveTypeResult.error)
+    logError("dashboard-pending-leave", pendingLeaveResult.error)
+
+    const employees = (employeeResult.data ?? []) as Record<string, unknown>[]
+    const outlets = (outletResult.data ?? []) as Record<string, unknown>[]
+    // Relations are joined in memory instead of through PostgREST embeds:
+    // embedding on a list query forces an expensive join plan that occasionally
+    // spikes to ~800 ms, while the flat queries stay around 270 ms.
+    const outletById = new Map(
+      outlets.map((row) => [row.id as string, row] as const)
+    )
+    const employeeById = new Map(
+      employees.map((row) => [row.id as string, row] as const)
+    )
+    const leaveTypeById = new Map(
+      ((leaveTypeResult.data ?? []) as Record<string, unknown>[]).map(
+        (row) => [row.id as string, row] as const
+      )
+    )
+
+    return empty({
+      employees: employees.map((row) => ({
+        status: mapEmploymentStatus(row.status),
+      })),
+      attendance: (attendanceResult.data ?? []) as {
+        first_in: string | null
+      }[],
+      bookings: (
+        (bookingStatusResult.data ?? []) as { status: unknown }[]
+      ).map((row) => ({ status: mapBookingStatus(row.status) })),
+      latestBookings: (
+        (latestBookingResult.data ?? []) as Record<string, unknown>[]
+      ).flatMap((row) => {
+        const outlet = outletById.get(row.outlet_id as string)
+        if (!outlet) return []
+        return [
+          {
+            id: row.id as string,
+            booking_no: row.booking_no as string,
+            booking_date: row.booking_date as string,
+            total: Number(row.total ?? 0),
+            line_count: Number(row.line_count ?? 0),
+            status: mapBookingStatus(row.status),
+            outlet: {
+              name: outlet.name as string,
+              address: (outlet.address as string | null) ?? null,
+              code: outlet.code as string,
+            },
+          },
+        ]
+      }),
+      outlets: outlets.map((row) => ({ status: mapOutletStatus(row) })),
+      upcomingLeave: (
+        (upcomingLeaveResult.data ?? []) as Record<string, unknown>[]
+      ).flatMap((row) => {
+        const employee = employeeById.get(row.employee_id as string)
+        const leaveType = leaveTypeById.get(row.leave_type_id as string)
+        if (!employee || !leaveType) return []
+        return [
+          {
+            id: row.id as string,
+            start_date: row.start_date as string,
+            days_count: Number(row.days ?? 0),
+            employee: {
+              first_name: employee.first_name as string,
+              last_name: employee.last_name as string,
+            },
+            leave_type: { code: leaveType.code as string },
+          },
+        ]
+      }),
+      pendingLeave: pendingLeaveResult.count ?? 0,
+    })
+  }
+)
+
 
 /* -------------------------------------------------------------------------- */
 /*                                Workspace                                   */
@@ -1155,22 +1319,22 @@ type PendingApprovalRow = {
   document_snapshot: unknown
 }
 
-export async function getPendingApprovals(): Promise<
+export const getPendingApprovals = cache(async (): Promise<
   QueryResult<MyPendingApproval[]>
-> {
+> => {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("my_pending_approvals")
-    .select("*")
-    .order("requested_at", { ascending: true })
+  const [{ data, error }, names] = await Promise.all([
+    supabase
+      .from("my_pending_approvals")
+      .select("*")
+      .order("requested_at", { ascending: true }),
+    getEmployeeNameMap(),
+  ])
 
   logError("pending-approvals", error)
   if (error || !data) return empty([])
 
   const rows = data as PendingApprovalRow[]
-  const names = await getEmployeeNamesByUserId(
-    Array.from(new Set(rows.map((row) => row.requested_by)))
-  )
 
   return empty(
     rows.map((row) => ({
@@ -1207,7 +1371,7 @@ export async function getPendingApprovals(): Promise<
       submitted_at: row.requested_at,
     }))
   )
-}
+})
 
 type ApprovalRequestRow = {
   id: string
@@ -1224,21 +1388,21 @@ export async function getApprovalHistory(): Promise<
   QueryResult<ApprovalHistoryItem[]>
 > {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("approval_requests")
-    .select(
-      "id, document_type, document_snapshot, template_name, requested_by, status, created_at, completed_at"
-    )
-    .order("created_at", { ascending: false })
-    .limit(50)
+  const [{ data, error }, names] = await Promise.all([
+    supabase
+      .from("approval_requests")
+      .select(
+        "id, document_type, document_snapshot, template_name, requested_by, status, created_at, completed_at"
+      )
+      .order("created_at", { ascending: false })
+      .limit(50),
+    getEmployeeNameMap(),
+  ])
 
   logError("approval-history", error)
   if (error || !data) return empty([])
 
   const rows = data as ApprovalRequestRow[]
-  const names = await getEmployeeNamesByUserId(
-    Array.from(new Set(rows.map((row) => row.requested_by)))
-  )
 
   return empty(
     rows.map((row) => ({
@@ -1429,17 +1593,19 @@ export async function getPendingApproval(
   requestStageId: string
 ): Promise<QueryResult<MyPendingApproval | null>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("my_pending_approvals")
-    .select("*")
-    .eq("request_stage_id", requestStageId)
-    .maybeSingle()
+  const [{ data, error }, names] = await Promise.all([
+    supabase
+      .from("my_pending_approvals")
+      .select("*")
+      .eq("request_stage_id", requestStageId)
+      .maybeSingle(),
+    getEmployeeNameMap(),
+  ])
 
   logError("pending-approval", error)
   if (error || !data) return empty(null)
 
   const row = data as PendingApprovalRow
-  const names = await getEmployeeNamesByUserId([row.requested_by])
   return empty({
     request_stage_id: row.request_stage_id,
     request_id: row.request_id,

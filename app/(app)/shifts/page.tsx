@@ -8,9 +8,10 @@ import { PageHeader } from "@/components/shared/page-header"
 import { getShifts } from "@/lib/data/queries"
 
 export default async function ShiftsPage() {
-  await requirePermission(PERMISSIONS.SHIFTS_VIEW)
-
-  const result = await getShifts()
+  const [, result] = await Promise.all([
+    requirePermission(PERMISSIONS.SHIFTS_VIEW),
+    getShifts(),
+  ])
   const shifts = result.data
   const overnight = shifts.filter((shift) => shift.is_overnight)
   const averageBreak = shifts.length

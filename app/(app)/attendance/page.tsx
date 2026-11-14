@@ -14,9 +14,10 @@ import { PageHeader } from "@/components/shared/page-header"
 import { getAttendance } from "@/lib/data/queries"
 
 export default async function AttendancePage() {
-  await requirePermission(PERMISSIONS.ATTENDANCE_VIEW)
-
-  const attendanceResult = await getAttendance()
+  const [, attendanceResult] = await Promise.all([
+    requirePermission(PERMISSIONS.ATTENDANCE_VIEW),
+    getAttendance(),
+  ])
   const attendance = attendanceResult.data
 
   const todayKey = new Date().toISOString().slice(0, 10)

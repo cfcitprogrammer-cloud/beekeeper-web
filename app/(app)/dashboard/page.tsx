@@ -1,7 +1,6 @@
 import Link from "next/link"
 import {
   ArrowRight,
-  CalendarDays,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
@@ -30,11 +29,7 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import {
-  getAttendanceDaily,
-  getBookings,
-  getEmployees,
-  getLeaveRequests,
-  getOutlets,
+  getDashboardSnapshot,
   getPendingApprovals,
   getWorkspaceContext,
 } from "@/lib/data/queries"
@@ -84,48 +79,34 @@ function greeting() {
 }
 
 export default async function DashboardPage() {
-  await requirePermission(PERMISSIONS.DASHBOARD_VIEW)
-
-  const [
-    employeesResult,
-    attendanceResult,
-    approvalsResult,
-    bookingsResult,
-    outletsResult,
-    leaveResult,
-    contextResult,
-  ] = await Promise.all([
-    getEmployees(),
-    getAttendanceDaily(),
+  const [, snapshotResult, approvalsResult, contextResult] = await Promise.all([
+    requirePermission(PERMISSIONS.DASHBOARD_VIEW),
+    getDashboardSnapshot(),
     getPendingApprovals(),
-    getBookings(),
-    getOutlets(),
-    getLeaveRequests(),
     getWorkspaceContext(),
   ])
 
-  const employees = employeesResult.data
-  const attendance = attendanceResult.data
+  const {
+    employees,
+    attendance,
+    bookings,
+    latestBookings,
+    outlets,
+    upcomingLeave,
+    pendingLeave,
+  } = snapshotResult.data
   const approvals = approvalsResult.data
-  const bookings = bookingsResult.data
-  const outlets = outletsResult.data
-  const leaveRequests = leaveResult.data
   const context = contextResult.data
 
   const activeHeadcount = employees.filter((employee) =>
     ["ACTIVE", "PROBATION", "ON_LEAVE"].includes(employee.status)
   ).length
   const presentToday = attendance.filter((row) =>
-    ["PRESENT", "LATE", "REMOTE", "HALF_DAY"].includes(row.status)
+    Boolean(row.first_in)
   ).length
-  const lateToday = attendance.filter((row) => row.status === "LATE").length
-  const onLeaveToday = attendance.filter(
-    (row) => row.status === "ON_LEAVE"
-  ).length
-  const absentToday = attendance.filter((row) => row.status === "ABSENT").length
-  const pendingLeave = leaveRequests.filter(
-    (request) => request.status === "PENDING"
-  ).length
+  const lateToday = 0
+  const onLeaveToday = 0
+  const absentToday = attendance.length - presentToday
   const pendingBookings = bookings.filter((booking) =>
     ["DRAFT", "PENDING_APPROVAL"].includes(booking.status)
   ).length
@@ -145,15 +126,6 @@ export default async function DashboardPage() {
     status,
     count: outlets.filter((outlet) => outlet.status === status).length,
   }))
-
-  const upcomingLeave = leaveRequests
-    .filter((request) => request.status === "APPROVED")
-    .sort((a, b) => a.start_date.localeCompare(b.start_date))
-    .slice(0, 4)
-
-  const latestBookings = [...bookings]
-    .sort((a, b) => b.booking_date.localeCompare(a.booking_date))
-    .slice(0, 5)
 
   const attendanceRate = percent(presentToday, attendance.length)
   const firstName =

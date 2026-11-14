@@ -14,9 +14,8 @@ import {
 import { formatCurrency } from "@/lib/format"
 
 export default async function ExpensesPage() {
-  await requirePermission(PERMISSIONS.EXPENSES_VIEW)
-
-  const [plansResult, expensesResult, categoriesResult] = await Promise.all([
+  const [, plansResult, expensesResult, categoriesResult] = await Promise.all([
+    requirePermission(PERMISSIONS.EXPENSES_VIEW),
     getExpensePlans(),
     getExpenses(),
     getExpenseCategories(),

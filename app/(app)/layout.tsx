@@ -9,13 +9,17 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const access = await getAccessContext()
+  // Start both requests together. `getPendingApprovals` is request-cached, so
+  // pages such as the dashboard and approval inbox reuse this result instead of
+  // querying again.
+  const [access, approvals] = await Promise.all([
+    getAccessContext(),
+    getPendingApprovals(),
+  ])
 
   if (!access.user) {
     redirect("/login")
   }
-
-  const approvals = await getPendingApprovals()
 
   return (
     <AppShell

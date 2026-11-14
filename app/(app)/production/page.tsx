@@ -50,9 +50,8 @@ const sections = [
 ]
 
 export default async function ProductionPage() {
-  const access = await requirePermission(PERMISSIONS.PRODUCTION_VIEW)
-
-  const [pipelinesResult, stagesResult, usageResult] = await Promise.all([
+  const [access, pipelinesResult, stagesResult, usageResult] = await Promise.all([
+    requirePermission(PERMISSIONS.PRODUCTION_VIEW),
     getProductionPipelines(),
     getProductionStages(),
     getProductionUsage(),

@@ -14,9 +14,8 @@ import { getBookings, getEmployees, getOutlets } from "@/lib/data/queries"
 import { formatCurrency } from "@/lib/format"
 
 export default async function BookingsPage() {
-  await requirePermission(PERMISSIONS.BOOKINGS_VIEW)
-
-  const [bookingsResult, outletsResult, employeesResult] = await Promise.all([
+  const [, bookingsResult, outletsResult, employeesResult] = await Promise.all([
+    requirePermission(PERMISSIONS.BOOKINGS_VIEW),
     getBookings(),
     getOutlets(),
     getEmployees(),

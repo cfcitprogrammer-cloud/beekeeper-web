@@ -8,9 +8,10 @@ import { hasAnyPermission, PERMISSIONS } from "@/lib/auth/permissions"
 import { getProductionUsage } from "@/lib/data/operations"
 
 export default async function ProductionUsagePage() {
-  const access = await requirePermission(PERMISSIONS.PRODUCTION_VIEW)
-
-  const usageResult = await getProductionUsage()
+  const [access, usageResult] = await Promise.all([
+    requirePermission(PERMISSIONS.PRODUCTION_VIEW),
+    getProductionUsage(),
+  ])
   const canRecord = hasAnyPermission(access.permissions, [
     PERMISSIONS.PRODUCTION_CREATE,
     PERMISSIONS.PRODUCTION_UPDATE,

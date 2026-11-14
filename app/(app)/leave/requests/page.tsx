@@ -8,9 +8,10 @@ import { PageHeader } from "@/components/shared/page-header"
 import { getLeaveRequests } from "@/lib/data/queries"
 
 export default async function LeaveRequestsPage() {
-  await requirePermission(PERMISSIONS.LEAVE_REVIEW)
-
-  const result = await getLeaveRequests()
+  const [, result] = await Promise.all([
+    requirePermission(PERMISSIONS.LEAVE_REVIEW),
+    getLeaveRequests(),
+  ])
   const requests = result.data
 
   const pending = requests.filter((request) => request.status === "PENDING")

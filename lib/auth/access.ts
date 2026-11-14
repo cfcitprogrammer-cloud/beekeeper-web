@@ -14,21 +14,32 @@ type EmployeeRow = {
   email: string | null
 }
 
-type CompanyMembershipRow = {
-  company_id: string
-  role_id: string
-}
-
 type WorkspaceMembershipRow = {
   workspace_id: string
   company_id: string
-  role_id: string
+  role_id: string | null
 }
 
 type RoleRow = {
   id: string
   name: string
   is_system: boolean
+}
+
+type RoleWithPermissions = RoleRow & {
+  permissions?: { permission_key: string }[] | null
+}
+
+type CompanyBundle = Company & {
+  workspaces?: Workspace[] | null
+  workspace_locations?: WorkspaceLocation[] | null
+}
+
+type CompanyMembershipRow = {
+  company_id: string
+  role_id: string | null
+  role: RoleWithPermissions | null
+  company: CompanyBundle | null
 }
 
 export type AccessUser = {
@@ -76,22 +87,60 @@ function displayName(
   return metadataName?.trim() || email.split("@")[0] || "Workspace user"
 }
 
+function activeWorkspaces(company: CompanyBundle | null): Workspace[] {
+  return [...(company?.workspaces ?? [])]
+    .filter((workspace) => workspace.is_active)
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function activeLocations(company: CompanyBundle | null): WorkspaceLocation[] {
+  return [...(company?.workspace_locations ?? [])]
+    .filter((location) => location.is_active)
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function grantedPermissions(roles: RoleWithPermissions[]): string[] {
+  return Array.from(
+    new Set(
+      roles.flatMap((role) =>
+        (role.permissions ?? []).map((permission) => permission.permission_key)
+      )
+    )
+  )
+}
+
 /**
  * Resolve the signed-in user together with their company/workspace membership,
  * role and effective permissions.
  *
- * Permissions are read from `role_permissions` for the user's company role and
- * any workspace role they hold in the same company. System roles (`is_system`)
- * fall back to the full catalog when no explicit grants exist, which keeps the
- * built-in Owner/Admin roles usable before role permissions are configured.
+ * The JWT is verified locally with `getClaims()` (the project uses asymmetric
+ * signing keys), which avoids a network round trip to the Auth server on every
+ * request that `getUser()` would incur.
+ *
+ * Membership, company, workspace and role data are fetched in as few Supabase
+ * round trips as possible: the company bundle and the company-level role are
+ * embedded in the `company_members` query, so the common case needs a single
+ * data round trip. A follow-up query only runs when the user has additional
+ * workspace roles or no company membership row.
  */
 export const getAccessContext = cache(async (): Promise<AccessContext> => {
+  const tmpStart = performance.now()
+  console.log("[tmp-access] start")
   const supabase = await createClient()
   const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser()
+    data: claimsData,
+  } = await supabase.auth.getClaims()
+  const claims = claimsData?.claims as
+    | {
+        sub?: string
+        email?: string
+        user_metadata?: Record<string, unknown>
+      }
+    | undefined
 
-  if (!authUser) {
+  const userId = claims?.sub
+
+  if (!userId) {
     return {
       supabase,
       user: null,
@@ -110,19 +159,21 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
       supabase
         .from("employees")
         .select("id, company_id, workspace_id, first_name, last_name, email")
-        .eq("user_id", authUser.id)
+        .eq("user_id", userId)
         .maybeSingle(),
       supabase
         .from("company_members")
-        .select("company_id, role_id")
-        .eq("user_id", authUser.id)
+        .select(
+          "company_id, role_id, role:roles(id,name,is_system,permissions:role_permissions(permission_key)), company:companies(*, workspaces(*), workspace_locations(*))"
+        )
+        .eq("user_id", userId)
         .order("created_at")
         .limit(1)
         .maybeSingle(),
       supabase
         .from("workspace_members")
         .select("workspace_id, company_id, role_id")
-        .eq("user_id", authUser.id),
+        .eq("user_id", userId),
     ])
 
   const employee = (employeeResult.data as EmployeeRow | null) ?? null
@@ -142,17 +193,17 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
       ?.workspace_id ??
     null
 
-  const email = employee?.email ?? authUser.email ?? ""
+  const email = employee?.email ?? claims?.email ?? ""
   const metadataName =
-    (authUser.user_metadata?.full_name as string | undefined) ??
-    (authUser.user_metadata?.name as string | undefined)
+    (claims?.user_metadata?.full_name as string | undefined) ??
+    (claims?.user_metadata?.name as string | undefined)
   const name = displayName(employee, metadataName, email)
 
   if (!companyId) {
     return {
       supabase,
       user: {
-        id: authUser.id,
+        id: userId,
         email,
         name,
         initials: initialsOf(name),
@@ -173,63 +224,50 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
   const companyWorkspaceMembers = workspaceMembers.filter(
     (member) => member.company_id === companyId
   )
-  const roleIds = Array.from(
+  const embeddedCompany = companyMember?.company ?? null
+  const embeddedRole = companyMember?.role ?? null
+
+  // Company roles and workspace roles both grant permissions. The company role
+  // arrives embedded above; only workspace roles that differ need a lookup.
+  const extraRoleIds = Array.from(
     new Set(
-      [
-        companyMember?.role_id,
-        ...companyWorkspaceMembers.map((m) => m.role_id),
-      ].filter((roleId): roleId is string => Boolean(roleId))
+      companyWorkspaceMembers
+        .map((member) => member.role_id)
+        .filter(
+          (roleId): roleId is string =>
+            Boolean(roleId) && roleId !== embeddedRole?.id
+        )
     )
   )
+  const needsCompanyBundle = !embeddedCompany
 
-  const roleQuery =
-    roleIds.length > 0
-      ? supabase.from("roles").select("id, name, is_system").in("id", roleIds)
-      : Promise.resolve({ data: [] as RoleRow[], error: null })
-  const rolePermissionQuery =
-    roleIds.length > 0
+  const [companyResult, extraRolesResult] = await Promise.all([
+    needsCompanyBundle
       ? supabase
-          .from("role_permissions")
-          .select("role_id, permission_key")
-          .in("role_id", roleIds)
-      : Promise.resolve({
-          data: [] as { role_id: string; permission_key: string }[],
-          error: null,
-        })
-
-  const [
-    companyResult,
-    workspaceResult,
-    locationResult,
-    roleResult,
-    rolePermissionResult,
-  ] = await Promise.all([
-    supabase.from("companies").select("*").eq("id", companyId).maybeSingle(),
-    supabase
-      .from("workspaces")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .order("name"),
-    supabase
-      .from("workspace_locations")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .order("name"),
-    roleQuery,
-    rolePermissionQuery,
+          .from("companies")
+          .select("*, workspaces(*), workspace_locations(*)")
+          .eq("id", companyId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    extraRoleIds.length > 0
+      ? supabase
+          .from("roles")
+          .select(
+            "id, name, is_system, permissions:role_permissions(permission_key)"
+          )
+          .in("id", extraRoleIds)
+      : Promise.resolve({ data: [], error: null }),
   ])
 
-  const roles = (roleResult.data as RoleRow[] | null) ?? []
-  const granted = Array.from(
-    new Set(
-      (
-        (rolePermissionResult.data as
-          { role_id: string; permission_key: string }[] | null) ?? []
-      ).map((row) => row.permission_key)
-    )
-  )
+  const company =
+    embeddedCompany ??
+    ((companyResult.data as CompanyBundle | null) ?? null)
+  const roles: RoleWithPermissions[] = [
+    ...(embeddedRole ? [embeddedRole] : []),
+    ...((extraRolesResult.data as RoleWithPermissions[] | null) ?? []),
+  ]
+
+  const granted = grantedPermissions(roles)
   const hasSystemRole = roles.some((role) => role.is_system)
   const permissions: string[] =
     granted.length > 0
@@ -241,10 +279,11 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
   const primaryRole =
     roles.find((role) => role.id === companyMember?.role_id) ?? roles[0]
 
+  console.log("[tmp-access] done in", Math.round(performance.now() - tmpStart), "ms")
   return {
     supabase,
     user: {
-      id: authUser.id,
+      id: userId,
       email,
       name,
       initials: initialsOf(name),
@@ -255,9 +294,9 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
     employee,
     companyId,
     workspaceId,
-    company: (companyResult.data as Company | null) ?? null,
-    workspaces: (workspaceResult.data as Workspace[] | null) ?? [],
-    locations: (locationResult.data as WorkspaceLocation[] | null) ?? [],
+    company,
+    workspaces: activeWorkspaces(company),
+    locations: activeLocations(company),
     permissions,
   }
 })

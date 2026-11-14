@@ -14,9 +14,8 @@ import { getApprovalHistory, getPendingApprovals } from "@/lib/data/queries"
 import { formatCurrency } from "@/lib/format"
 
 export default async function ApprovalInboxPage() {
-  await requirePermission(PERMISSIONS.APPROVALS_VIEW)
-
-  const [pendingResult, historyResult] = await Promise.all([
+  const [, pendingResult, historyResult] = await Promise.all([
+    requirePermission(PERMISSIONS.APPROVALS_VIEW),
     getPendingApprovals(),
     getApprovalHistory(),
   ])

@@ -19,7 +19,7 @@ export type FeedItem = {
 }
 
 const FEED_COLUMNS =
-  "id, action, entity_type, entity_id, summary, metadata, actor_user_id, actor_employee_id, created_at"
+  "id, action, entity_type, entity_id, summary, metadata, actor_user_id, actor_employee_id, created_at, actor:employees!actor_employee_id(first_name,last_name)"
 
 export async function getActivityFeed(limit = 75): Promise<ActionResult<FeedItem[]>> {
   const authorized = await getAuthorizedContext(PERMISSIONS.FEED_VIEW)
@@ -28,6 +28,7 @@ export async function getActivityFeed(limit = 75): Promise<ActionResult<FeedItem
   const { supabase, companyId } = authorized.context
   const safeLimit = Math.min(Math.max(limit, 1), 200)
 
+  const t0 = performance.now()
   const { data, error } = await supabase
     .from("activity_feed")
     .select(FEED_COLUMNS)
@@ -35,12 +36,14 @@ export async function getActivityFeed(limit = 75): Promise<ActionResult<FeedItem
     .order("created_at", { ascending: false })
     .limit(safeLimit)
 
+  console.log("[tmp-feed] feed query", Math.round(performance.now() - t0), "ms")
+
   if (error) {
     console.error("[action:getActivityFeed]", error)
     return failure(error.message)
   }
 
-  const rows = (data ?? []) as {
+  const rows = (data ?? []) as unknown as {
     id: string
     action: string
     entity_type: string
@@ -49,27 +52,9 @@ export async function getActivityFeed(limit = 75): Promise<ActionResult<FeedItem
     metadata: Record<string, unknown> | null
     actor_user_id: string | null
     actor_employee_id: string | null
+    actor: { first_name: string; last_name: string } | null
     created_at: string
   }[]
-
-  const employeeIds = Array.from(
-    new Set(rows.map((row) => row.actor_employee_id).filter(Boolean))
-  ) as string[]
-
-  const names = new Map<string, string>()
-  if (employeeIds.length > 0) {
-    const { data: employees } = await supabase
-      .from("employees")
-      .select("id, first_name, last_name")
-      .in("id", employeeIds)
-    for (const employee of (employees ?? []) as {
-      id: string
-      first_name: string
-      last_name: string
-    }[]) {
-      names.set(employee.id, `${employee.first_name} ${employee.last_name}`)
-    }
-  }
 
   return {
     success: true,
@@ -80,8 +65,8 @@ export async function getActivityFeed(limit = 75): Promise<ActionResult<FeedItem
       entity_id: row.entity_id,
       summary: row.summary,
       metadata: row.metadata ?? {},
-      actor_name: row.actor_employee_id
-        ? (names.get(row.actor_employee_id) ?? null)
+      actor_name: row.actor
+        ? `${row.actor.first_name} ${row.actor.last_name}`.trim()
         : null,
       created_at: row.created_at,
     })),
@@ -109,11 +94,18 @@ export async function getMonitoringSnapshot(): Promise<
   if ("error" in authorized) return authorized.error
 
   const { supabase, companyId } = authorized.context
+  const t0 = performance.now()
   const { data, error } = await supabase
     .from("operational_monitoring")
     .select("*")
     .eq("company_id", companyId)
     .order("workspace_name")
+
+  console.log(
+    "[tmp-feed] monitoring query",
+    Math.round(performance.now() - t0),
+    "ms"
+  )
 
   if (error) {
     console.error("[action:getMonitoringSnapshot]", error)
