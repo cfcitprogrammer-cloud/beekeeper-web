@@ -36,6 +36,7 @@ import {
   PERMISSIONS,
   type PermissionKey,
 } from "@/lib/auth/permissions"
+import { AsciiBee } from "@/components/shared/ascii-art"
 import {
   Sidebar,
   SidebarContent,
@@ -535,15 +536,15 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/home" />}>
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-                <Hexagon className="size-4.5 fill-current" strokeWidth={1.5} />
+              <span className="flex size-8 shrink-0 items-center justify-center border border-primary/40 bg-primary/10 text-primary">
+                <Hexagon className="size-4 fill-current" strokeWidth={1.5} />
               </span>
               <div className="grid flex-1 text-left leading-tight">
-                <span className="truncate font-heading text-sm font-semibold">
+                <span className="truncate font-heading text-base font-normal tracking-tight">
                   Beekeeper
                 </span>
-                <span className="truncate text-[0.625rem] text-muted-foreground">
-                  ERP · HR · Field Ops
+                <span className="truncate font-mono text-[0.5rem] tracking-[0.18em] text-muted-foreground uppercase">
+                  Hive · ERP · Field ops
                 </span>
               </div>
             </SidebarMenuButton>
@@ -558,9 +559,11 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent className="gap-1">
-        {visibleSections.map((section) => (
+        {visibleSections.map((section, index) => (
           <SidebarGroup key={section.label}>
-            <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="h-6 font-mono text-[0.5rem] font-medium tracking-[0.22em] text-sidebar-foreground/40 uppercase">
+              {`${String(index + 1).padStart(2, "0")} // ${section.label}`}
+            </SidebarGroupLabel>
             <SidebarMenu>
               {section.items.map((item) => (
                 <NavEntry
@@ -573,6 +576,13 @@ export function AppSidebar({
             </SidebarMenu>
           </SidebarGroup>
         ))}
+
+        <div className="mt-auto border-t border-sidebar-border px-4 pt-3 pb-2 group-data-[collapsible=icon]:hidden">
+          <AsciiBee className="text-[0.5rem] text-sidebar-primary/40" />
+          <p className="mt-1.5 font-mono text-[0.5rem] tracking-[0.2em] text-sidebar-foreground/30 uppercase">
+            apiary // hive 01
+          </p>
+        </div>
       </SidebarContent>
 
       <SidebarFooter>

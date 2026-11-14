@@ -116,11 +116,11 @@ export function GlobalSearch() {
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="hidden h-8 w-56 justify-start gap-2 text-muted-foreground md:inline-flex"
+        className="hidden h-8 w-56 justify-start gap-2 rounded-none border-border bg-card font-mono text-[0.5625rem] tracking-[0.14em] text-muted-foreground uppercase md:inline-flex"
       >
         <Search className="size-3.5" />
-        <span className="flex-1 text-left">Search or jump to…</span>
-        <kbd className="rounded border bg-muted px-1 font-mono text-[0.5625rem] text-muted-foreground">
+        <span className="flex-1 text-left">Search / jump</span>
+        <kbd className="border border-border bg-muted px-1 font-mono text-[0.5rem] text-muted-foreground">
           ⌘K
         </kbd>
       </Button>

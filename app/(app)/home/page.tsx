@@ -7,12 +7,9 @@ import {
   ArrowRight,
   Building2,
   CalendarDays,
-  CheckCircle2,
-  Circle,
   Clock3,
   Factory,
   Fingerprint,
-  House,
   KeyRound,
   LayoutDashboard,
   MapPinned,
@@ -24,21 +21,20 @@ import {
   Wallet,
 } from "lucide-react"
 
-import { PageHeader } from "@/components/shared/page-header"
-import { Badge } from "@/components/ui/badge"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  AsciiBee,
+  AsciiCell,
+  AsciiComb,
+  SectionRule,
+} from "@/components/shared/ascii-art"
+import { Badge } from "@/components/ui/badge"
 import { getAccessContext } from "@/lib/auth/access"
 import {
   hasPermission,
   PERMISSIONS,
   type PermissionKey,
 } from "@/lib/auth/permissions"
+import { cn } from "@/lib/utils"
 
 type QuickLink = {
   title: string
@@ -149,6 +145,64 @@ const quickLinks: QuickLink[] = [
   },
 ]
 
+function Notice({
+  icon: Icon,
+  label,
+  title,
+  children,
+}: {
+  icon: ElementType
+  label: string
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative overflow-hidden border border-primary/30 bg-primary/[0.035] p-4 sm:p-5">
+      <AsciiComb className="absolute -right-8 -bottom-8 text-primary/10" />
+      <div className="relative flex items-start gap-3">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+          <Icon className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 space-y-1.5">
+          <p className="micro-label text-primary">{label}</p>
+          <p className="font-heading text-xl leading-tight">{title}</p>
+          <div className="max-w-3xl text-xs/relaxed text-muted-foreground">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SpecRow({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: string
+  hint?: string
+}) {
+  return (
+    <div className="flex items-baseline gap-3 border-b border-border/60 py-2 last:border-0">
+      <span className="micro-label shrink-0">{label}</span>
+      <span
+        className="h-px flex-1 border-b border-dotted border-border"
+        aria-hidden
+      />
+      <span className="text-right">
+        <span className="block text-xs font-medium">{value}</span>
+        {hint ? (
+          <span className="block text-[0.625rem] text-muted-foreground">
+            {hint}
+          </span>
+        ) : null}
+      </span>
+    </div>
+  )
+}
+
 function ChecklistItem({
   done,
   label,
@@ -160,11 +214,15 @@ function ChecklistItem({
 }) {
   return (
     <li className="flex items-start gap-2.5">
-      {done ? (
-        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-      ) : (
-        <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground/50" />
-      )}
+      <span
+        className={cn(
+          "mt-px font-mono text-[0.625rem] leading-none",
+          done ? "text-primary" : "text-muted-foreground/40"
+        )}
+        aria-hidden
+      >
+        {done ? "[x]" : "[ ]"}
+      </span>
       <span className="min-w-0">
         <span className="block text-xs font-medium">{label}</span>
         <span className="block text-[0.6875rem] text-muted-foreground">
@@ -193,179 +251,237 @@ export default async function HomePage() {
   )
   const workspace = access.workspaces[0]
 
+  // Fill the final grid row so the hairline background never shows through as
+  // an empty gray cell. Two-column and three-column layouts need different
+  // counts, so each filler is revealed per breakpoint.
+  const threeColumnFillers = (3 - (availableLinks.length % 3)) % 3
+  const twoColumnFillers = (2 - (availableLinks.length % 2)) % 2
+  const gridFillers = Array.from(
+    { length: Math.max(threeColumnFillers, twoColumnFillers) },
+    (_, index) => ({
+      key: `filler-${index}`,
+      visible: cn(
+        "hidden",
+        index < twoColumnFillers && "sm:flex",
+        index >= twoColumnFillers && index < threeColumnFillers
+          ? "xl:flex"
+          : index < threeColumnFillers
+            ? ""
+            : "xl:hidden"
+      ),
+    })
+  )
+
   return (
-    <div className="space-y-5">
-      <PageHeader
-        eyebrow={access.company?.name ?? "Beekeeper"}
-        title={`Welcome back, ${firstName}`}
-        description="This is your home base. Jump into any module your role can access, or review what is still pending on your account."
-        icon={House}
-      />
+    <div className="space-y-6">
+      <section className="relative overflow-hidden border border-border bg-card">
+        <div className="field-grid absolute inset-0 opacity-25" aria-hidden />
+        <div
+          className="absolute -top-24 -right-24 size-72 bg-primary/10 blur-3xl"
+          aria-hidden
+        />
+
+        <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[1.45fr_1fr]">
+          <div className="space-y-4">
+            <p className="micro-label flex items-center gap-2">
+              <span className="h-px w-5 bg-primary" aria-hidden />
+              00 // The hive
+            </p>
+            <h1 className="font-heading text-4xl leading-[0.95] tracking-tight text-balance sm:text-5xl">
+              Welcome back, {firstName}.
+            </h1>
+            <p className="font-heading text-base text-primary">
+              蜂と蜜のために
+            </p>
+            <p className="max-w-xl text-xs/relaxed text-muted-foreground">
+              This is your home base. Jump into any module your role can access,
+              or review what is still pending on your account.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Badge
+                variant="outline"
+                className="border-primary/40 text-primary"
+              >
+                {user.role}
+              </Badge>
+              <Badge variant="outline">
+                {access.company?.name ?? "No company linked"}
+              </Badge>
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-between gap-4 border-t border-border pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+            <div className="flex items-start justify-between gap-3">
+              <AsciiBee className="text-[0.7rem] text-primary" />
+              <AsciiComb className="text-[0.5rem] text-muted-foreground/25" />
+            </div>
+            <dl className="space-y-1.5 font-mono text-[0.5625rem] tracking-[0.14em] uppercase">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-muted-foreground/60">workspace</dt>
+                <dd className="truncate">{workspace?.name ?? "unassigned"}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-muted-foreground/60">permissions</dt>
+                <dd className="tabular-nums">
+                  {String(access.permissions.length).padStart(2, "0")}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-muted-foreground/60">status</dt>
+                <dd className={hasPermissions ? "text-primary" : ""}>
+                  {hasPermissions ? "active" : "pending"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
 
       {!hasCompany && (
-        <Card className="border-amber-500/40 bg-amber-500/5">
-          <CardHeader className="border-b border-amber-500/20 pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <Building2 className="size-4 text-amber-600 dark:text-amber-400" />
-              Your workspace is not ready yet
-            </CardTitle>
-            <CardDescription>
-              You are signed in as{" "}
-              <span className="font-medium text-foreground">{user.email}</span>,
-              but your account is not linked to a company. A company
-              administrator needs to add you to a company and assign a role
-              before modules become available.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              Once your membership is configured, refresh this page. In the
-              meantime you can still use this home page and sign out from the
-              user menu.
-            </p>
-          </CardContent>
-        </Card>
+        <Notice
+          icon={Building2}
+          label="Account // 01"
+          title="Your workspace is not ready yet"
+        >
+          <p>
+            You are signed in as{" "}
+            <span className="font-medium text-foreground">{user.email}</span>,
+            but your account is not linked to a company. A company
+            administrator needs to add you to a company and assign a role before
+            modules become available.
+          </p>
+          <p className="mt-1.5">
+            Once your membership is configured, refresh this page. In the
+            meantime you can still use this home page and sign out from the user
+            menu.
+          </p>
+        </Notice>
       )}
 
       {hasCompany && !hasPermissions && (
-        <Card className="border-amber-500/40 bg-amber-500/5">
-          <CardHeader className="border-b border-amber-500/20 pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <KeyRound className="size-4 text-amber-600 dark:text-amber-400" />
-              No module access yet
-            </CardTitle>
-            <CardDescription>
-              Your account is connected to{" "}
-              <span className="font-medium text-foreground">
-                {access.company?.name ?? "your company"}
-              </span>
-              , but the{" "}
-              <span className="font-medium text-foreground">{user.role}</span>{" "}
-              role does not have any module permissions. Ask an administrator to
-              grant the permissions you need.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              This page is always available, even without permissions, so you
-              can still see your account status and sign out.
-            </p>
-          </CardContent>
-        </Card>
+        <Notice
+          icon={KeyRound}
+          label="Access // 02"
+          title="No module access yet"
+        >
+          <p>
+            Your account is connected to{" "}
+            <span className="font-medium text-foreground">
+              {access.company?.name ?? "your company"}
+            </span>
+            , but the{" "}
+            <span className="font-medium text-foreground">{user.role}</span> role
+            does not have any module permissions. Ask an administrator to grant
+            the permissions you need.
+          </p>
+          <p className="mt-1.5">
+            This page is always available, even without permissions, so you can
+            still see your account status and sign out.
+          </p>
+        </Notice>
       )}
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="font-heading text-sm font-semibold">
-              Your workspace
-            </h2>
-            <p className="text-[0.6875rem] text-muted-foreground">
-              {availableLinks.length === 0
-                ? "No modules are available for your role yet."
-                : `${availableLinks.length} module${availableLinks.length === 1 ? "" : "s"} available for your role.`}
-            </p>
-          </div>
-          <Badge variant="secondary" className="text-[0.625rem]">
-            {user.role}
-          </Badge>
-        </div>
+        <SectionRule
+          index="01"
+          label="Modules"
+          trailing={`${String(availableLinks.length).padStart(2, "0")} available`}
+        />
 
         {availableLinks.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-start gap-3 py-6">
-              <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <House className="size-5" />
-              </span>
-              <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  Nothing has been assigned to you yet
-                </p>
-                <p className="max-w-xl text-xs text-muted-foreground">
-                  You will see quick links here as soon as your role has
-                  permissions. You can keep this page open and refresh after an
-                  administrator updates your access.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="relative overflow-hidden border border-border bg-card p-6">
+            <AsciiComb className="absolute right-4 bottom-4 text-muted-foreground/10" />
+            <p className="micro-label text-primary">Standby</p>
+            <p className="mt-2 font-heading text-2xl">
+              Nothing has been assigned to you yet.
+            </p>
+            <p className="mt-2 max-w-xl text-xs text-muted-foreground">
+              You will see quick links here as soon as your role has
+              permissions. Keep this page open and refresh after an
+              administrator updates your access.
+            </p>
+          </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {availableLinks.map((link) => {
+          <div className="grid gap-px border border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
+            {availableLinks.map((link, index) => {
               const Icon = link.icon
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="group rounded-xl border bg-card p-4 transition-colors hover:border-primary/40"
+                  className="group relative bg-card p-4 transition-colors hover:bg-accent/50"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="size-4" />
+                    <span className="font-mono text-[0.5625rem] tracking-[0.16em] text-muted-foreground/50 tabular-nums">
+                      {String(index + 1).padStart(2, "0")}
                     </span>
-                    <ArrowRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    <Icon className="size-4 text-primary" aria-hidden />
                   </div>
-                  <p className="mt-3 text-sm font-semibold">{link.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-5 font-heading text-lg leading-none">
+                    {link.title}
+                  </p>
+                  <p className="mt-2 pr-6 text-[0.6875rem] text-muted-foreground">
                     {link.description}
                   </p>
+                  <ArrowRight
+                    className="absolute right-4 bottom-4 size-3.5 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+                    aria-hidden
+                  />
                 </Link>
               )
             })}
+            {gridFillers.map((filler) => (
+              <div
+                key={filler.key}
+                aria-hidden
+                className={cn(
+                  "relative items-center justify-center bg-card p-4",
+                  filler.visible
+                )}
+              >
+                <span className="font-mono text-[0.5625rem] tracking-[0.16em] text-muted-foreground/40 uppercase">
+                  spare comb
+                </span>
+                <AsciiCell className="mt-3 text-[0.5rem] text-muted-foreground/15" />
+              </div>
+            ))}
           </div>
         )}
       </section>
 
-      <div className="grid gap-3 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="border-b pb-3">
-            <CardTitle className="text-sm">Your access</CardTitle>
-            <CardDescription>
-              Where you sit in the workspace and what is still pending.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-0">
-            <dl className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <dt className="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
-                  Signed in as
-                </dt>
-                <dd className="mt-1 truncate text-xs font-medium">
-                  {user.name}
-                </dd>
-                <dd className="truncate text-[0.6875rem] text-muted-foreground">
-                  {user.email}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
-                  Role
-                </dt>
-                <dd className="mt-1 text-xs font-medium">{user.role}</dd>
-                <dd className="text-[0.6875rem] text-muted-foreground">
-                  {access.permissions.length} permission
-                  {access.permissions.length === 1 ? "" : "s"} granted
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
-                  Company
-                </dt>
-                <dd className="mt-1 truncate text-xs font-medium">
-                  {access.company?.name ?? "Not linked yet"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
-                  Workspace
-                </dt>
-                <dd className="mt-1 truncate text-xs font-medium">
-                  {workspace?.name ?? "No workspace assigned"}
-                </dd>
-              </div>
-            </dl>
+      <section className="space-y-3">
+        <SectionRule
+          index="02"
+          label="Access"
+          trailing={`${access.permissions.length} granted`}
+        />
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="border border-border bg-card p-5 lg:col-span-2">
+            <p className="micro-label text-primary">Identity // hive record</p>
+            <div className="mt-3">
+              <SpecRow
+                label="Signed in"
+                value={user.name}
+                hint={user.email}
+              />
+              <SpecRow
+                label="Role"
+                value={user.role}
+                hint={`${access.permissions.length} permission${
+                  access.permissions.length === 1 ? "" : "s"
+                } granted`}
+              />
+              <SpecRow
+                label="Company"
+                value={access.company?.name ?? "Not linked yet"}
+              />
+              <SpecRow
+                label="Workspace"
+                value={workspace?.name ?? "No workspace assigned"}
+              />
+            </div>
 
-            <ul className="space-y-2.5 border-t pt-3">
+            <ul className="mt-4 grid gap-2 border-t border-border pt-4 sm:grid-cols-2">
               <ChecklistItem
                 done
                 label="Signed in"
@@ -399,32 +515,24 @@ export default async function HomePage() {
                 }
               />
             </ul>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader className="border-b pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <ShieldCheck className="size-4 text-primary" />
-              Need more access?
-            </CardTitle>
-            <CardDescription>
-              Permissions are managed by your company administrator.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0">
-            <p className="text-xs/relaxed text-muted-foreground">
+          <div className="relative overflow-hidden border border-border bg-card p-5">
+            <AsciiComb className="absolute -right-8 -bottom-8 text-muted-foreground/10" />
+            <p className="micro-label text-primary">Support // 03</p>
+            <p className="mt-2 font-heading text-2xl">Need more access?</p>
+            <p className="mt-2 text-xs/relaxed text-muted-foreground">
               Ask an administrator to review your role in the workspace. Role
               permissions decide which modules and actions appear in the
               sidebar and on this page.
             </p>
-            <p className="rounded-md border bg-muted/30 px-2.5 py-2 text-[0.6875rem] text-muted-foreground">
+            <p className="mt-3 border border-border bg-muted/30 px-2.5 py-2 text-[0.6875rem] text-muted-foreground">
               Include your email address when contacting them so they can find
               your membership quickly.
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }

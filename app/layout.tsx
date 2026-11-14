@@ -1,4 +1,4 @@
-import { Geist_Mono, Nunito_Sans, Noto_Sans } from "next/font/google"
+import { Fraunces, Space_Grotesk, Space_Mono } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -6,18 +6,19 @@ import { Providers } from "@/components/providers/react-query"
 import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/toast"
 
-const notoSansHeading = Noto_Sans({
+const fraunces = Fraunces({
   subsets: ["latin"],
   variable: "--font-heading",
 })
 
-const nunitoSans = Nunito_Sans({
+const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-sans",
 })
 
-const fontMono = Geist_Mono({
+const spaceMono = Space_Mono({
   subsets: ["latin"],
+  weight: ["400", "700"],
   variable: "--font-mono",
 })
 
@@ -32,10 +33,10 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn(
         "antialiased",
-        fontMono.variable,
+        spaceMono.variable,
         "font-sans",
-        nunitoSans.variable,
-        notoSansHeading.variable
+        spaceGrotesk.variable,
+        fraunces.variable
       )}
     >
       <body>

@@ -20,23 +20,24 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between",
+        "flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-end sm:justify-between",
         className
       )}
     >
       <div className="flex min-w-0 items-start gap-3">
         {Icon && (
-          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="size-4.5" aria-hidden />
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center border border-border bg-card text-primary">
+            <Icon className="size-4" aria-hidden />
           </span>
         )}
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-1.5">
           {eyebrow && (
-            <p className="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground uppercase">
+            <p className="flex items-center gap-2 font-mono text-[0.5625rem] font-medium tracking-[0.22em] text-muted-foreground uppercase">
+              <span className="h-px w-4 shrink-0 bg-primary" aria-hidden />
               {eyebrow}
             </p>
           )}
-          <h1 className="font-heading text-xl font-semibold tracking-tight text-balance">
+          <h1 className="font-heading text-2xl font-normal tracking-tight text-balance sm:text-3xl">
             {title}
           </h1>
           {description && (

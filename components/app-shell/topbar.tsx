@@ -7,7 +7,6 @@ import {
   Bell,
   Building2,
   CheckCheck,
-  ChevronRight,
   LogOut,
   Settings2,
   ShieldCheck,
@@ -125,25 +124,27 @@ export function Topbar({
 
       <nav
         aria-label="Breadcrumb"
-        className="hidden min-w-0 items-center gap-1 md:flex"
+        className="hidden min-w-0 items-center gap-1.5 md:flex"
       >
         <Link
           href="/home"
-          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="font-mono text-[0.5625rem] tracking-[0.18em] text-muted-foreground uppercase transition-colors hover:text-foreground"
         >
           Workspace
         </Link>
         {breadcrumbs.map((crumb) => (
           <React.Fragment key={crumb.href}>
-            <ChevronRight className="size-3 text-muted-foreground/60" />
+            <span className="font-mono text-[0.5625rem] text-muted-foreground/35">
+              /
+            </span>
             {crumb.isLast ? (
-              <span className="truncate text-xs font-medium">
+              <span className="truncate font-mono text-[0.5625rem] font-medium tracking-[0.18em] uppercase">
                 {crumb.label}
               </span>
             ) : (
               <Link
                 href={crumb.href}
-                className="truncate text-xs text-muted-foreground transition-colors hover:text-foreground"
+                className="truncate font-mono text-[0.5625rem] tracking-[0.18em] text-muted-foreground uppercase transition-colors hover:text-foreground"
               >
                 {crumb.label}
               </Link>
@@ -153,7 +154,11 @@ export function Topbar({
       </nav>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <div className="mr-1 hidden items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-[0.625rem] text-muted-foreground xl:flex">
+        <span className="mr-1 hidden items-center gap-1.5 font-mono text-[0.5rem] tracking-[0.18em] text-muted-foreground uppercase xl:flex">
+          <span className="size-1.5 bg-primary" aria-hidden />
+          hive online
+        </span>
+        <div className="mr-1 hidden items-center gap-1.5 border border-border bg-card px-2 py-1 font-mono text-[0.5rem] tracking-[0.14em] text-muted-foreground uppercase xl:flex">
           <Building2 className="size-3" />
           <span className="max-w-40 truncate font-medium text-foreground">
             {workspaceName}

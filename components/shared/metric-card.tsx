@@ -40,17 +40,20 @@ export function MetricCard({
     trend === "up" ? ArrowUpRight : trend === "down" ? ArrowDownRight : Minus
 
   return (
-    <Card className={cn("gap-0 py-4", className)}>
-      <CardContent className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">
-            {label}
-          </p>
-          <p className="font-heading text-xl font-semibold tracking-tight tabular-nums">
+    <Card
+      className={cn(
+        "relative gap-0 rounded-none border border-border bg-card py-0 ring-0",
+        className
+      )}
+    >
+      <CardContent className="flex items-start justify-between gap-3 p-4">
+        <div className="min-w-0 space-y-2">
+          <p className="micro-label">{label}</p>
+          <p className="font-heading text-3xl leading-none tracking-tight tabular-nums">
             {value}
           </p>
           {(hint || trendLabel) && (
-            <div className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-[0.625rem] text-muted-foreground">
               {trend && (
                 <span
                   className={cn(
@@ -68,14 +71,22 @@ export function MetricCard({
             </div>
           )}
         </div>
-        <span
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-lg",
-            accentClasses[accent]
-          )}
-        >
-          <Icon className="size-4.5" aria-hidden />
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <span
+            className="font-mono text-[0.5rem] leading-none text-muted-foreground/40"
+            aria-hidden
+          >
+            +
+          </span>
+          <span
+            className={cn(
+              "flex size-8 shrink-0 items-center justify-center border border-border",
+              accentClasses[accent]
+            )}
+          >
+            <Icon className="size-4" aria-hidden />
+          </span>
+        </div>
       </CardContent>
     </Card>
   )

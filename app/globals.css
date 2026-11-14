@@ -8,72 +8,78 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.141 0.005 285.823);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.141 0.005 285.823);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.141 0.005 285.823);
-    --primary: oklch(0.555 0.163 48.998);
-    --primary-foreground: oklch(0.987 0.022 95.277);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.967 0.001 286.375);
-    --muted-foreground: oklch(0.552 0.016 285.938);
-    --accent: oklch(0.967 0.001 286.375);
-    --accent-foreground: oklch(0.21 0.006 285.885);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.92 0.004 286.32);
-    --input: oklch(0.92 0.004 286.32);
-    --ring: oklch(0.705 0.015 286.067);
-    --chart-1: oklch(0.837 0.128 66.29);
-    --chart-2: oklch(0.705 0.213 47.604);
-    --chart-3: oklch(0.646 0.222 41.116);
-    --chart-4: oklch(0.553 0.195 38.402);
-    --chart-5: oklch(0.47 0.157 37.304);
-    --radius: 0.45rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.141 0.005 285.823);
-    --sidebar-primary: oklch(0.666 0.179 58.318);
-    --sidebar-primary-foreground: oklch(0.987 0.022 95.277);
-    --sidebar-accent: oklch(0.967 0.001 286.375);
-    --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-    --sidebar-border: oklch(0.92 0.004 286.32);
-    --sidebar-ring: oklch(0.705 0.015 286.067);
+    /* Warm paper, deep honey, and ink. The light mode is the daylight apiary. */
+    --background: oklch(0.965 0.015 85);
+    --foreground: oklch(0.22 0.02 65);
+    --card: oklch(0.985 0.008 85);
+    --card-foreground: oklch(0.22 0.02 65);
+    --popover: oklch(0.985 0.008 85);
+    --popover-foreground: oklch(0.22 0.02 65);
+    --primary: oklch(0.62 0.15 65);
+    --primary-foreground: oklch(0.985 0.01 85);
+    --secondary: oklch(0.93 0.025 85);
+    --secondary-foreground: oklch(0.27 0.025 65);
+    --muted: oklch(0.93 0.02 85);
+    --muted-foreground: oklch(0.5 0.03 65);
+    --accent: oklch(0.92 0.05 80);
+    --accent-foreground: oklch(0.27 0.03 65);
+    --destructive: oklch(0.55 0.2 27);
+    --border: oklch(0.22 0.02 65 / 16%);
+    --input: oklch(0.22 0.02 65 / 20%);
+    --ring: oklch(0.62 0.15 65 / 55%);
+    --chart-1: oklch(0.72 0.16 75);
+    --chart-2: oklch(0.63 0.14 62);
+    --chart-3: oklch(0.55 0.12 55);
+    --chart-4: oklch(0.46 0.1 50);
+    --chart-5: oklch(0.38 0.08 45);
+    --radius: 0.2rem;
+    --sidebar: oklch(0.945 0.022 85);
+    --sidebar-foreground: oklch(0.22 0.02 65);
+    --sidebar-primary: oklch(0.62 0.15 65);
+    --sidebar-primary-foreground: oklch(0.985 0.01 85);
+    --sidebar-accent: oklch(0.9 0.045 80);
+    --sidebar-accent-foreground: oklch(0.24 0.03 65);
+    --sidebar-border: oklch(0.22 0.02 65 / 16%);
+    --sidebar-ring: oklch(0.62 0.15 65 / 55%);
+    --honey: oklch(0.72 0.16 75);
+    --comb: oklch(0.9 0.05 80);
 }
 
 .dark {
-    --background: oklch(0.141 0.005 285.823);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.21 0.006 285.885);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.21 0.006 285.885);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.473 0.137 46.201);
-    --primary-foreground: oklch(0.987 0.022 95.277);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.274 0.006 286.033);
-    --muted-foreground: oklch(0.705 0.015 286.067);
-    --accent: oklch(0.274 0.006 286.033);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.552 0.016 285.938);
-    --chart-1: oklch(0.837 0.128 66.29);
-    --chart-2: oklch(0.705 0.213 47.604);
-    --chart-3: oklch(0.646 0.222 41.116);
-    --chart-4: oklch(0.553 0.195 38.402);
-    --chart-5: oklch(0.47 0.157 37.304);
-    --sidebar: oklch(0.21 0.006 285.885);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.769 0.188 70.08);
-    --sidebar-primary-foreground: oklch(0.279 0.077 45.635);
-    --sidebar-accent: oklch(0.274 0.006 286.033);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.552 0.016 285.938);
+    /* Near-black paper with warm bone ink and a honey signal. */
+    --background: oklch(0.145 0.008 70);
+    --foreground: oklch(0.88 0.023 82);
+    --card: oklch(0.19 0.01 72);
+    --card-foreground: oklch(0.88 0.023 82);
+    --popover: oklch(0.19 0.01 72);
+    --popover-foreground: oklch(0.88 0.023 82);
+    --primary: oklch(0.8 0.155 78);
+    --primary-foreground: oklch(0.17 0.02 65);
+    --secondary: oklch(0.24 0.012 72);
+    --secondary-foreground: oklch(0.88 0.023 82);
+    --muted: oklch(0.23 0.01 72);
+    --muted-foreground: oklch(0.67 0.02 78);
+    --accent: oklch(0.27 0.03 72);
+    --accent-foreground: oklch(0.9 0.023 82);
+    --destructive: oklch(0.67 0.19 25);
+    --border: oklch(0.88 0.023 82 / 16%);
+    --input: oklch(0.88 0.023 82 / 20%);
+    --ring: oklch(0.8 0.155 78 / 55%);
+    --chart-1: oklch(0.8 0.155 78);
+    --chart-2: oklch(0.72 0.14 68);
+    --chart-3: oklch(0.62 0.12 58);
+    --chart-4: oklch(0.52 0.1 50);
+    --chart-5: oklch(0.42 0.08 45);
+    --sidebar: oklch(0.125 0.008 70);
+    --sidebar-foreground: oklch(0.88 0.023 82);
+    --sidebar-primary: oklch(0.8 0.155 78);
+    --sidebar-primary-foreground: oklch(0.17 0.02 65);
+    --sidebar-accent: oklch(0.22 0.03 72);
+    --sidebar-accent-foreground: oklch(0.92 0.023 82);
+    --sidebar-border: oklch(0.88 0.023 82 / 16%);
+    --sidebar-ring: oklch(0.8 0.155 78 / 55%);
+    --honey: oklch(0.8 0.155 78);
+    --comb: oklch(0.26 0.03 72);
 }
 
 @theme inline {
@@ -123,13 +129,88 @@
   * {
     @apply border-border outline-ring/50;
     }
+
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+    }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
     }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    font-optical-sizing: auto;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    }
+
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    }
+
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
     }
-  html {
-    @apply font-sans;
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
     }
+}
+
+/* A very light paper grain, matching the printed/manual feel of the theme. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+.dark body::before {
+  opacity: 0.05;
+}
+
+/* Micro-label used for section numbers, module counters and metadata. */
+@layer components {
+  .micro-label {
+    font-family: var(--font-mono);
+    font-size: 0.5625rem;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+}
+
+/* Dotted field-paper background for heroes and auth panels. */
+.field-grid {
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--foreground) 16%, transparent) 1px,
+    transparent 1.25px
+  );
+  background-size: 22px 22px;
+}
+
+/* Active nav item gets a honey edge, like a marked page in a manual. */
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-sub-button"][data-active="true"] {
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+/* Keep dialogs and cards visibly square-edged at small radii. */
+[data-slot="dialog-content"],
+[data-slot="sheet-content"] {
+  border: 1px solid var(--border);
 }
