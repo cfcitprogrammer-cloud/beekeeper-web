@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 
 import { AppShell } from "@/components/app-shell/app-shell"
-import { NoAccessScreen } from "@/components/auth/no-access-screen"
 import { getAccessContext } from "@/lib/auth/access"
 import { getPendingApprovals } from "@/lib/data/queries"
 
@@ -14,10 +13,6 @@ export default async function AppLayout({
 
   if (!access.user) {
     redirect("/login")
-  }
-
-  if (!access.companyId) {
-    return <NoAccessScreen user={access.user} />
   }
 
   const approvals = await getPendingApprovals()

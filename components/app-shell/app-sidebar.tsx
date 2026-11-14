@@ -14,6 +14,7 @@ import {
   Factory,
   Fingerprint,
   Hexagon,
+  House,
   LayoutDashboard,
   MapPinned,
   Package,
@@ -79,6 +80,11 @@ export const navSections: NavSection[] = [
   {
     label: "Overview",
     items: [
+      {
+        title: "Home",
+        href: "/home",
+        icon: House,
+      },
       {
         title: "Dashboard",
         href: "/dashboard",
@@ -528,7 +534,7 @@ export function AppSidebar({
       <SidebarHeader className="gap-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
+            <SidebarMenuButton size="lg" render={<Link href="/home" />}>
               <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
                 <Hexagon className="size-4.5 fill-current" strokeWidth={1.5} />
               </span>

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, FlaskConical, Plus, Trash2, UserRound } from "lucide-react"
 
@@ -55,6 +56,9 @@ export function UsageForm({
   const selectedStage =
     pipelineStages.find((stage) => stage.id === stageId) ?? null
   const stageSkus = selectedStage?.skus ?? []
+  const selectedSkuIds = new Set(lines.map((line) => line.skuId).filter(Boolean))
+  const allSkusSelected =
+    stageSkus.length > 0 && stageSkus.every((sku) => selectedSkuIds.has(sku.id))
 
   function choosePipeline(value: string) {
     setPipelineId(value)
@@ -301,8 +305,21 @@ export function UsageForm({
 
           {selectedStage && stageSkus.length === 0 ? (
             <p className="text-[0.625rem] text-muted-foreground">
-              Assign SKUs to this stage from the production stages page before
-              recording usage.
+              No SKUs are assigned to this stage yet.{" "}
+              <Link
+                href={`/production/stages/${selectedStage.id}/assign`}
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Assign SKUs to this stage
+              </Link>{" "}
+              before recording usage.
+            </p>
+          ) : null}
+
+          {allSkusSelected && stageSkus.length > 1 ? (
+            <p className="text-[0.625rem] text-muted-foreground">
+              All {stageSkus.length} SKUs assigned to this stage are already on
+              this entry.
             </p>
           ) : null}
 
@@ -310,7 +327,9 @@ export function UsageForm({
             variant="outline"
             size="sm"
             onClick={addLine}
-            disabled={!selectedStage || stageSkus.length === 0}
+            disabled={
+              !selectedStage || stageSkus.length === 0 || allSkusSelected
+            }
           >
             <Plus />
             Add another SKU

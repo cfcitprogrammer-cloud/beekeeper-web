@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import { getAccessContext } from "@/lib/auth/access"
 import { defaultRouteFor } from "@/lib/auth/permissions"
 import { createClient } from "@/utils/supabase/server"
 
@@ -56,12 +55,9 @@ export async function login(
       ? next
       : null
 
-  let fallback = "/dashboard"
+  let fallback = "/home"
   if (!requested) {
-    const access = await getAccessContext()
-    fallback = access.companyId
-      ? defaultRouteFor(access.permissions)
-      : "/dashboard"
+    fallback = defaultRouteFor()
   }
 
   redirect(requested ?? fallback)

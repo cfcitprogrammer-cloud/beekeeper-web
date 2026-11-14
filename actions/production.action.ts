@@ -73,6 +73,7 @@ export async function createProductionPipeline(
   )
 
   revalidatePath("/production")
+  revalidatePath("/production/pipelines")
   revalidatePath("/feed")
 
   return { success: true, data }
@@ -125,6 +126,8 @@ export async function updateProductionPipeline(
   )
 
   revalidatePath("/production")
+  revalidatePath("/production/pipelines")
+  revalidatePath(`/production/pipelines/${data.id}`)
   revalidatePath("/feed")
 
   return { success: true, data }
@@ -164,6 +167,8 @@ export async function deleteProductionPipeline(
   )
 
   revalidatePath("/production")
+  revalidatePath("/production/pipelines")
+  revalidatePath("/production/stages")
   revalidatePath("/feed")
 
   return { success: true, data: { id } }
@@ -239,6 +244,10 @@ export async function addProductionStage(
   )
 
   revalidatePath("/production")
+  revalidatePath("/production/stages")
+  revalidatePath("/production/pipelines")
+  revalidatePath(`/production/pipelines/${input.pipelineId}`)
+  revalidatePath("/production/usage/new")
   revalidatePath("/feed")
 
   return { success: true, data }
@@ -288,6 +297,8 @@ export async function updateProductionStage(
   )
 
   revalidatePath("/production")
+  revalidatePath("/production/stages")
+  revalidatePath("/production/pipelines")
   revalidatePath("/feed")
 
   return { success: true, data }
@@ -327,6 +338,8 @@ export async function deleteProductionStage(
   )
 
   revalidatePath("/production")
+  revalidatePath("/production/stages")
+  revalidatePath("/production/pipelines")
   revalidatePath("/feed")
 
   return { success: true, data: { id } }
@@ -377,6 +390,8 @@ export async function reorderProductionStages(
   }
 
   revalidatePath("/production")
+  revalidatePath("/production/stages")
+  revalidatePath(`/production/pipelines/${pipelineId}`)
 
   return { success: true, data: { pipelineId } }
 }

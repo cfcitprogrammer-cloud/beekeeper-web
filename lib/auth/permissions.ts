@@ -218,23 +218,7 @@ export function canAccessPath(
   return permission ? hasPermission(permissions, permission) : true
 }
 
-/** The first route a user with these permissions can open. */
-export function defaultRouteFor(
-  permissions: readonly string[] | null | undefined
-) {
-  if (hasPermission(permissions, PERMISSIONS.DASHBOARD_VIEW))
-    return "/dashboard"
-  if (hasPermission(permissions, PERMISSIONS.EMPLOYEES_VIEW))
-    return "/employees"
-  if (hasPermission(permissions, PERMISSIONS.ATTENDANCE_VIEW))
-    return "/attendance"
-  if (hasPermission(permissions, PERMISSIONS.LEAVE_VIEW))
-    return "/leave/balances"
-  if (hasPermission(permissions, PERMISSIONS.OUTLETS_VIEW)) return "/outlets"
-  if (hasPermission(permissions, PERMISSIONS.INVENTORY_VIEW))
-    return "/inventory/skus"
-  if (hasPermission(permissions, PERMISSIONS.BOOKINGS_VIEW)) return "/bookings"
-  if (hasPermission(permissions, PERMISSIONS.APPROVALS_VIEW))
-    return "/approvals/inbox"
-  return "/forbidden"
+/** The default landing route for every signed-in user. */
+export function defaultRouteFor() {
+  return "/home"
 }

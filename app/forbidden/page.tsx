@@ -14,11 +14,7 @@ import { defaultRouteFor } from "@/lib/auth/permissions"
 
 export default async function ForbiddenPage() {
   const access = await getAccessContext()
-  const home = access.user
-    ? access.companyId
-      ? defaultRouteFor(access.permissions)
-      : "/dashboard"
-    : "/login"
+  const home = access.user ? defaultRouteFor() : "/login"
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">

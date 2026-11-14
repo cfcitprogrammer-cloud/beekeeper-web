@@ -11,6 +11,7 @@ import {
   Factory,
   Fingerprint,
   FlaskConical,
+  House,
   Layers,
   LayoutDashboard,
   MapPinned,
@@ -38,6 +39,7 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 const quickLinks = [
+  { title: "Home", href: "/home", icon: House, group: "Overview" },
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, group: "Overview" },
   { title: "Employee directory", href: "/employees", icon: Users, group: "People" },
   { title: "Onboard employee", href: "/employees/new", icon: Users, group: "People" },

@@ -37,9 +37,7 @@ export default async function LoginPage({
   const access = await getAccessContext()
 
   if (access.user) {
-    redirect(
-      access.companyId ? defaultRouteFor(access.permissions) : "/dashboard"
-    )
+    redirect(defaultRouteFor())
   }
 
   const { next } = await searchParams

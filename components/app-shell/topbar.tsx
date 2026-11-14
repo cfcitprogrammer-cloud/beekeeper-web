@@ -37,6 +37,7 @@ import { GlobalSearch } from "./global-search"
 import { ThemeToggle } from "./theme-toggle"
 
 const segmentLabels: Record<string, string> = {
+  home: "Home",
   dashboard: "Dashboard",
   employees: "Employees",
   new: "Onboard employee",
@@ -127,7 +128,7 @@ export function Topbar({
         className="hidden min-w-0 items-center gap-1 md:flex"
       >
         <Link
-          href="/dashboard"
+          href="/home"
           className="text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           Workspace
