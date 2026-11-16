@@ -284,7 +284,8 @@ begin
     ('approvals.update', 'Update approval requests'),
     ('approvals.delete', 'Delete approval requests'),
     ('approvals.decide', 'Approve or reject approval requests'),
-    ('approvals.manage', 'Manage approval templates')
+    ('approvals.manage', 'Manage approval templates'),
+    ('roles.manage',     'Create roles and manage role permissions and member access')
   on conflict (key) do update
     set description = excluded.description;
 

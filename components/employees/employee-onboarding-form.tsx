@@ -14,6 +14,7 @@ import {
   BriefcaseBusiness,
   Check,
   CircleUserRound,
+  KeyRound,
   UserPlus,
 } from "lucide-react"
 
@@ -31,6 +32,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatDate, humanize } from "@/lib/format"
@@ -54,6 +56,7 @@ const schema = z
   pagibigNo: z.string().optional(),
   createAccount: z.boolean(),
   password: z.string().optional(),
+  confirmPassword: z.string().optional(),
   firstName: z.string().min(1, "First name is required"),
   middleName: z.string().optional(),
   lastName: z.string().min(1, "Last name is required"),
@@ -73,17 +76,25 @@ const schema = z
   payFrequency: z.enum(PAY_FREQUENCIES),
   })
   .superRefine((values, context) => {
-    if (values.createAccount && !values.password) {
+    if (!values.createAccount) return
+
+    if (!values.password) {
       context.addIssue({
         code: "custom",
         path: ["password"],
         message: "Set a password for the employee login.",
       })
-    } else if (values.createAccount && (values.password?.length ?? 0) < 8) {
+    } else if (values.password.length < 8) {
       context.addIssue({
         code: "custom",
         path: ["password"],
         message: "The password must be at least 8 characters.",
+      })
+    } else if (values.password !== values.confirmPassword) {
+      context.addIssue({
+        code: "custom",
+        path: ["confirmPassword"],
+        message: "Passwords do not match.",
       })
     }
   })
@@ -110,8 +121,8 @@ const steps = [
   },
   {
     id: "government",
-    title: "Government IDs & access",
-    description: "Statutory numbers and employee login",
+    title: "Government IDs",
+    description: "Statutory numbers and payroll references",
     icon: BadgeCheck,
     fields: [
       "employeeNo",
@@ -119,8 +130,6 @@ const steps = [
       "philhealthNo",
       "tinNo",
       "pagibigNo",
-      "createAccount",
-      "password",
     ] as (keyof FormValues)[],
   },
   {
@@ -145,6 +154,13 @@ const steps = [
     fields: ["baseSalary", "payFrequency"] as (keyof FormValues)[],
   },
   {
+    id: "account",
+    title: "Account access",
+    description: "Create the employee's login credentials",
+    icon: KeyRound,
+    fields: ["createAccount", "password", "confirmPassword"] as (keyof FormValues)[],
+  },
+  {
     id: "review",
     title: "Review",
     description: "Confirm and create the employee record",
@@ -159,8 +175,9 @@ const defaultValues: FormValues = {
   philhealthNo: "",
   tinNo: "",
   pagibigNo: "",
-  createAccount: false,
+  createAccount: true,
   password: "",
+  confirmPassword: "",
   firstName: "",
   middleName: "",
   lastName: "",
@@ -265,7 +282,9 @@ export function EmployeeOnboardingForm({
     toast.add({
       type: "success",
       title: "Employee record created",
-      description: `${data.firstName} ${data.lastName} was added as ${result.data.employee_no}.`,
+      description: data.createAccount
+        ? `${data.firstName} ${data.lastName} was added as ${result.data.employee_no} with a login account for ${data.email}.`
+        : `${data.firstName} ${data.lastName} was added as ${result.data.employee_no}.`,
     })
     router.push("/employees")
     router.refresh()
@@ -276,7 +295,7 @@ export function EmployeeOnboardingForm({
       <PageHeader
         eyebrow="People"
         title="Onboard a new employee"
-        description="Capture personal, employment and compensation details in a guided four-step flow."
+        description="Capture personal, employment, compensation and login details in a guided onboarding flow."
         icon={UserPlus}
         actions={
           <Button variant="outline" render={<Link href="/employees" />}>
@@ -449,38 +468,6 @@ export function EmployeeOnboardingForm({
                       {...register("pagibigNo")}
                     />
                   </div>
-                  <div className="space-y-1.5 sm:col-span-2 rounded-lg border p-3">
-                    <label className="flex items-start gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 size-3.5 accent-primary"
-                        {...register("createAccount")}
-                      />
-                      <span>
-                        <span className="block font-medium">
-                          Create a Supabase Auth login
-                        </span>
-                        <span className="block text-[0.625rem] text-muted-foreground">
-                          Uses the work email above. The account is confirmed immediately
-                          when the service role key is configured.
-                        </span>
-                      </span>
-                    </label>
-                    {values.createAccount && (
-                      <div className="mt-3 space-y-1.5">
-                        <Label htmlFor="password">Initial password</Label>
-                        <Input
-                          id="password"
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="At least 8 characters"
-                          {...register("password")}
-                          aria-invalid={Boolean(errors.password)}
-                        />
-                        <FieldError message={errors.password?.message} />
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
 
@@ -634,6 +621,85 @@ export function EmployeeOnboardingForm({
 
               {step === 4 && (
                 <div className="space-y-4">
+                  <div className="rounded-lg border p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="createAccount" className="text-xs font-medium">
+                          Create a login account
+                        </Label>
+                        <p className="text-[0.625rem] text-muted-foreground">
+                          Give this employee a Supabase Auth account so they can sign
+                          in with their work email.
+                        </p>
+                      </div>
+                      <Controller
+                        control={control}
+                        name="createAccount"
+                        render={({ field }) => (
+                          <Switch
+                            id="createAccount"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            aria-label="Create a login account"
+                          />
+                        )}
+                      />
+                    </div>
+
+                    {values.createAccount ? (
+                      <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2">
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label>Login email</Label>
+                          <div className="flex h-7 items-center rounded-md border bg-muted/30 px-2 text-xs">
+                            {values.email || "Add a work email in Personal details"}
+                          </div>
+                          <p className="text-[0.625rem] text-muted-foreground">
+                            The account uses the work email entered in Personal
+                            details.
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="password">Initial password</Label>
+                          <Input
+                            id="password"
+                            type="password"
+                            autoComplete="new-password"
+                            placeholder="At least 8 characters"
+                            {...register("password")}
+                            aria-invalid={Boolean(errors.password)}
+                          />
+                          <FieldError message={errors.password?.message} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="confirmPassword">Confirm password</Label>
+                          <Input
+                            id="confirmPassword"
+                            type="password"
+                            autoComplete="new-password"
+                            placeholder="Re-enter the password"
+                            {...register("confirmPassword")}
+                            aria-invalid={Boolean(errors.confirmPassword)}
+                          />
+                          <FieldError message={errors.confirmPassword?.message} />
+                        </div>
+                        <p className="text-[0.625rem] text-muted-foreground sm:col-span-2">
+                          The auth account is linked to this employee record. When
+                          the Supabase service role key is configured, the email is
+                          confirmed immediately.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-md bg-muted/30 px-3 py-2 text-[0.625rem] text-muted-foreground">
+                        The employee will be created without login access. Turn this
+                        on to create their Supabase Auth account now.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {step === 5 && (
+                <div className="space-y-4">
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
                       Employee
@@ -706,8 +772,8 @@ export function EmployeeOnboardingForm({
                   </div>
                   <div className="rounded-lg border border-amber-500/25 bg-amber-500/8 p-3 text-[0.6875rem] text-amber-800 dark:text-amber-300">
                     Creating the record generates an employee number and adds the
-                    employee to the directory. Payroll profiles can be completed
-                    afterwards.
+                    employee to the directory. A login account is created when
+                    enabled. Payroll profiles can be completed afterwards.
                   </div>
                 </div>
               )}

@@ -47,6 +47,7 @@ export const PERMISSIONS = {
   APPROVALS_DELETE: "approvals.delete",
   APPROVALS_DECIDE: "approvals.decide",
   APPROVALS_MANAGE: "approvals.manage",
+  ROLES_MANAGE: "roles.manage",
   EXPENSES_VIEW: "expenses.view",
   EXPENSES_CREATE: "expenses.create",
   EXPENSES_UPDATE: "expenses.update",
@@ -112,6 +113,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { key: PERMISSIONS.APPROVALS_DELETE, description: "Delete approval requests", group: "Governance" },
   { key: PERMISSIONS.APPROVALS_DECIDE, description: "Approve or reject approval requests", group: "Governance" },
   { key: PERMISSIONS.APPROVALS_MANAGE, description: "Manage approval templates", group: "Governance" },
+  { key: PERMISSIONS.ROLES_MANAGE, description: "Create roles and manage role permissions and member access", group: "Governance" },
   { key: PERMISSIONS.EXPENSES_VIEW, description: "View expense plans and expenses", group: "Operations" },
   { key: PERMISSIONS.EXPENSES_CREATE, description: "Create expense plans and expenses", group: "Operations" },
   { key: PERMISSIONS.EXPENSES_UPDATE, description: "Update expense plans and expenses", group: "Operations" },
@@ -199,6 +201,7 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: PermissionKey }[] = [
   { prefix: "/approvals/stages", permission: PERMISSIONS.APPROVALS_MANAGE },
   { prefix: "/approvals/inbox", permission: PERMISSIONS.APPROVALS_VIEW },
   { prefix: "/approvals", permission: PERMISSIONS.APPROVALS_VIEW },
+  { prefix: "/roles", permission: PERMISSIONS.ROLES_MANAGE },
   { prefix: "/dashboard", permission: PERMISSIONS.DASHBOARD_VIEW },
 ]
 

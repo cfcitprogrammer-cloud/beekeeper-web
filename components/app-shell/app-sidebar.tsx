@@ -15,6 +15,7 @@ import {
   Fingerprint,
   Hexagon,
   House,
+  KeyRound,
   LayoutDashboard,
   MapPinned,
   Package,
@@ -309,6 +310,11 @@ export const navSections: NavSection[] = [
             href: "/production/usage",
             permission: PERMISSIONS.PRODUCTION_VIEW,
           },
+          {
+            title: "Audit report",
+            href: "/production/audit",
+            permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
         ],
       },
       {
@@ -380,6 +386,12 @@ export const navSections: NavSection[] = [
         href: "/dashboard",
         icon: BarChart3,
         permission: PERMISSIONS.DASHBOARD_VIEW,
+      },
+      {
+        title: "Roles & permissions",
+        href: "/roles",
+        icon: KeyRound,
+        permission: PERMISSIONS.ROLES_MANAGE,
       },
     ],
   },

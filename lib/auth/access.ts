@@ -269,12 +269,11 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
 
   const granted = grantedPermissions(roles)
   const hasSystemRole = roles.some((role) => role.is_system)
-  const permissions: string[] =
-    granted.length > 0
-      ? granted
-      : hasSystemRole
-        ? (Object.values(PERMISSIONS) as PermissionKey[])
-        : []
+  // System roles (the seeded Super Admin) always receive the full application
+  // catalog, including permissions added after the role was created.
+  const permissions: string[] = hasSystemRole
+    ? (Object.values(PERMISSIONS) as PermissionKey[])
+    : granted
 
   const primaryRole =
     roles.find((role) => role.id === companyMember?.role_id) ?? roles[0]

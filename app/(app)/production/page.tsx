@@ -1,6 +1,7 @@
 import Link from "next/link"
 import {
   ArrowRight,
+  ClipboardList,
   Factory,
   FlaskConical,
   Layers,
@@ -46,6 +47,12 @@ const sections = [
     description: "Review SKU-level usage submitted by your team.",
     href: "/production/usage",
     icon: FlaskConical,
+  },
+  {
+    title: "Audit report",
+    description: "Filter usage by pipeline, stage and SKU.",
+    href: "/production/audit",
+    icon: ClipboardList,
   },
 ]
 
