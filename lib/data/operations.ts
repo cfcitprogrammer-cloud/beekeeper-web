@@ -185,7 +185,9 @@ export type ProductionPipelineWithRelations = ProductionPipeline & {
 export type ProductionSkuSummary = Pick<
   Sku,
   "id" | "sku_code" | "name" | "brand" | "uom" | "is_active"
->
+> & {
+  components?: Array<{ componentSkuId: string; quantity: number }>
+}
 
 export type ProductionStageWithRelations = ProductionStage & {
   pipeline: Pick<ProductionPipeline, "id" | "name" | "code"> | null
@@ -232,7 +234,7 @@ export async function getProductionStages(): Promise<
   QueryResult<ProductionStageWithRelations[]>
 > {
   const supabase = await createClient()
-  const [stagesResult, pipelinesResult, assignmentsResult, skusResult] =
+  const [stagesResult, pipelinesResult, assignmentsResult, skusResult, componentsResult] =
     await Promise.all([
       supabase.from("production_stages").select("*").order("sequence"),
       supabase.from("production_pipelines").select("id,name,code"),
@@ -240,12 +242,16 @@ export async function getProductionStages(): Promise<
       supabase
         .from("skus")
         .select("id,sku_code,name,brand,uom,is_active"),
+      supabase
+        .from("sku_components")
+        .select("parent_sku_id,component_sku_id,quantity"),
     ])
 
   logError("production-stages", stagesResult.error)
   logError("production-stages-pipelines", pipelinesResult.error)
   logError("production-stage-skus", assignmentsResult.error)
   logError("production-stage-sku-catalog", skusResult.error)
+  logError("production-stage-sku-components", componentsResult.error)
   if (stagesResult.error || !stagesResult.data) return empty([])
 
   const pipelines = new Map(
@@ -254,23 +260,62 @@ export async function getProductionStages(): Promise<
       "id" | "name" | "code"
     >[]).map((pipeline) => [pipeline.id, pipeline])
   )
+  const componentsByParent = new Map<string, Array<{ componentSkuId: string; quantity: number }>>()
+  for (const row of (componentsResult.data ?? []) as Array<{
+    parent_sku_id: string
+    component_sku_id: string
+    quantity: number
+  }>) {
+    const list = componentsByParent.get(row.parent_sku_id) ?? []
+    list.push({ componentSkuId: row.component_sku_id, quantity: Number(row.quantity) })
+    componentsByParent.set(row.parent_sku_id, list)
+  }
   const skus = new Map(
-    ((skusResult.data ?? []) as ProductionSkuSummary[]).map((sku) => [
+    ((skusResult.data ?? []) as Array<Omit<ProductionSkuSummary, "components">>).map((sku) => [
       sku.id,
-      sku,
+      {
+        ...sku,
+        components: componentsByParent.get(sku.id) ?? [],
+      } as ProductionSkuSummary,
     ])
   )
   const assignments = (assignmentsResult.data ?? []) as ProductionStageSku[]
 
+  const assignedSkuIdsByStage = new Map<string, Set<string>>()
+  for (const assignment of assignments) {
+    const set = assignedSkuIdsByStage.get(assignment.stage_id) ?? new Set<string>()
+    set.add(assignment.sku_id)
+    assignedSkuIdsByStage.set(assignment.stage_id, set)
+  }
+
   return empty(
-    (stagesResult.data as ProductionStage[]).map((stage) => ({
-      ...stage,
-      pipeline: pipelines.get(stage.pipeline_id) ?? null,
-      skus: assignments
+    (stagesResult.data as ProductionStage[]).map((stage) => {
+      const assigned = assignments
         .filter((assignment) => assignment.stage_id === stage.id)
         .map((assignment) => skus.get(assignment.sku_id))
-        .filter((sku): sku is ProductionSkuSummary => Boolean(sku)),
-    }))
+        .filter((sku): sku is ProductionSkuSummary => Boolean(sku))
+
+      // Make component SKUs selectable on the same stage so BOM auto-expansion
+      // can create usage lines for them.
+      const assignedIds = new Set(assigned.map((sku) => sku.id))
+      const componentSkus: ProductionSkuSummary[] = []
+      for (const sku of assigned) {
+        for (const comp of sku.components ?? []) {
+          if (assignedIds.has(comp.componentSkuId)) continue
+          const compSku = skus.get(comp.componentSkuId)
+          if (compSku && !assignedIds.has(compSku.id)) {
+            assignedIds.add(compSku.id)
+            componentSkus.push(compSku)
+          }
+        }
+      }
+
+      return {
+        ...stage,
+        pipeline: pipelines.get(stage.pipeline_id) ?? null,
+        skus: [...assigned, ...componentSkus],
+      }
+    })
   )
 }
 
@@ -278,7 +323,7 @@ export async function getProductionStage(
   id: string
 ): Promise<QueryResult<ProductionStageWithRelations | null>> {
   const supabase = await createClient()
-  const [stageResult, assignmentsResult, skusResult] = await Promise.all([
+  const [stageResult, assignmentsResult, skusResult, componentsResult] = await Promise.all([
     supabase
       .from("production_stages")
       .select("*, pipeline:production_pipelines(id,name,code)")
@@ -286,29 +331,58 @@ export async function getProductionStage(
       .maybeSingle(),
     supabase.from("production_stage_skus").select("*").eq("stage_id", id),
     supabase.from("skus").select("id,sku_code,name,brand,uom,is_active"),
+    supabase.from("sku_components").select("parent_sku_id,component_sku_id,quantity"),
   ])
 
   logError("production-stage", stageResult.error)
   logError("production-stage-skus", assignmentsResult.error)
   logError("production-stage-sku-catalog", skusResult.error)
+  logError("production-stage-sku-components", componentsResult.error)
   if (stageResult.error || !stageResult.data) return empty(null)
 
   const stage = stageResult.data as ProductionStage & {
     pipeline: Pick<ProductionPipeline, "id" | "name" | "code"> | null
   }
+  const componentsByParent = new Map<string, Array<{ componentSkuId: string; quantity: number }>>()
+  for (const row of (componentsResult.data ?? []) as Array<{
+    parent_sku_id: string
+    component_sku_id: string
+    quantity: number
+  }>) {
+    const list = componentsByParent.get(row.parent_sku_id) ?? []
+    list.push({ componentSkuId: row.component_sku_id, quantity: Number(row.quantity) })
+    componentsByParent.set(row.parent_sku_id, list)
+  }
   const skus = new Map(
-    ((skusResult.data ?? []) as ProductionSkuSummary[]).map((sku) => [
+    ((skusResult.data ?? []) as Array<Omit<ProductionSkuSummary, "components">>).map((sku) => [
       sku.id,
-      sku,
+      {
+        ...sku,
+        components: componentsByParent.get(sku.id) ?? [],
+      } as ProductionSkuSummary,
     ])
   )
   const assignments = (assignmentsResult.data ?? []) as ProductionStageSku[]
 
+  const assigned = assignments
+    .map((assignment) => skus.get(assignment.sku_id))
+    .filter((sku): sku is ProductionSkuSummary => Boolean(sku))
+  const assignedIds = new Set(assigned.map((sku) => sku.id))
+  const componentSkus: ProductionSkuSummary[] = []
+  for (const sku of assigned) {
+    for (const comp of sku.components ?? []) {
+      if (assignedIds.has(comp.componentSkuId)) continue
+      const compSku = skus.get(comp.componentSkuId)
+      if (compSku && !assignedIds.has(compSku.id)) {
+        assignedIds.add(compSku.id)
+        componentSkus.push(compSku)
+      }
+    }
+  }
+
   return empty({
     ...stage,
-    skus: assignments
-      .map((assignment) => skus.get(assignment.sku_id))
-      .filter((sku): sku is ProductionSkuSummary => Boolean(sku)),
+    skus: [...assigned, ...componentSkus],
   })
 }
 

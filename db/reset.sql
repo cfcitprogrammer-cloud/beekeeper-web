@@ -22,6 +22,7 @@
 --   db/migrations/20261115_production_usage_batch.sql
 --   db/migrations/20261116_roles_manage_permission.sql
 --   db/migrations/20261117_inventory_uom_master.sql
+--   db/migrations/20261118_sku_components.sql
 --   db/seed/super_admin.sql
 --   db/seed/rls_policies.sql        (optional)
 --   db/seed/storage.sql             (optional, once per project)

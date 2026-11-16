@@ -28,6 +28,7 @@ import type {
   Shift,
   SkuCategory,
   SkuWithCategory,
+  SkuComponentWithSku,
   Workspace,
   WorkspaceLocation,
 } from "@/types/database"
@@ -1249,27 +1250,85 @@ export async function getSkuCategory(
 
 export async function getSkus(): Promise<QueryResult<SkuWithCategory[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("skus")
-    .select("*, category:sku_categories(id,name)")
-    .order("name")
+  const [skusResult, componentsResult] = await Promise.all([
+    supabase
+      .from("skus")
+      .select("*, category:sku_categories(id,name)")
+      .order("name"),
+    supabase.from("sku_components").select("parent_sku_id"),
+  ])
 
-  logError("skus", error)
-  return empty((data as SkuWithCategory[] | null) ?? [])
+  logError("skus", skusResult.error)
+  logError("sku-components", componentsResult.error)
+
+  const counts = new Map<string, number>()
+  for (const row of (componentsResult.data ?? []) as Array<{ parent_sku_id: string }>) {
+    counts.set(row.parent_sku_id, (counts.get(row.parent_sku_id) ?? 0) + 1)
+  }
+
+  const data = ((skusResult.data as SkuWithCategory[] | null) ?? []).map((sku) => ({
+    ...sku,
+    component_count: counts.get(sku.id) ?? 0,
+  }))
+
+  return empty(data)
 }
 
 export async function getSku(
   id: string
 ): Promise<QueryResult<SkuWithCategory | null>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("skus")
-    .select("*, category:sku_categories(id,name)")
-    .eq("id", id)
-    .maybeSingle()
+  const [skuResult, componentsResult] = await Promise.all([
+    supabase
+      .from("skus")
+      .select("*, category:sku_categories(id,name)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("sku_components")
+      .select("id", { count: "exact", head: true })
+      .eq("parent_sku_id", id),
+  ])
 
-  logError("sku", error)
-  return empty((data as SkuWithCategory | null) ?? null)
+  logError("sku", skuResult.error)
+  logError("sku-components", componentsResult.error)
+
+  if (!skuResult.data) return empty(null)
+  const sku = skuResult.data as SkuWithCategory
+  return empty({
+    ...sku,
+    component_count: componentsResult.count ?? 0,
+  })
+}
+
+export async function getSkuComponents(
+  parentId: string
+): Promise<QueryResult<SkuComponentWithSku[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("sku_components")
+    .select(
+      "*, component:skus!sku_components_component_sku_id_fkey(id,sku_code,name,brand,uom,is_active)"
+    )
+    .eq("parent_sku_id", parentId)
+    .order("created_at")
+
+  logError("sku-components", error)
+  const rows = (data ?? []) as Array<
+    SkuComponentWithSku & { component: SkuComponentWithSku["component"] }
+  >
+  return empty(
+    rows.map((row) => ({
+      id: row.id,
+      company_id: row.company_id,
+      parent_sku_id: row.parent_sku_id,
+      component_sku_id: row.component_sku_id,
+      quantity: row.quantity,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      component: row.component ?? null,
+    }))
+  )
 }
 
 /* -------------------------------------------------------------------------- */

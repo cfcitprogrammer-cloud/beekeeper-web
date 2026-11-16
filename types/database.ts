@@ -483,6 +483,20 @@ export interface Sku {
   updated_at: ISODateTime
 }
 
+export interface SkuComponent {
+  id: UUID
+  company_id: UUID
+  parent_sku_id: UUID
+  component_sku_id: UUID
+  quantity: number
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface SkuComponentWithSku extends SkuComponent {
+  component: Pick<Sku, "id" | "sku_code" | "name" | "brand" | "uom" | "is_active"> | null
+}
+
 /* -------------------------------------------------------------------------- */
 /*                          Operations extensions                             */
 /* -------------------------------------------------------------------------- */
@@ -1039,6 +1053,7 @@ export type ApprovalTemplateWithConfig = ApprovalTemplate & {
 
 export type SkuWithCategory = Sku & {
   category: Pick<SkuCategory, "id" | "name"> | null
+  component_count?: number
 }
 
 export type OutletWithRelations = Outlet & {

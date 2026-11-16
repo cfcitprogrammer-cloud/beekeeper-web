@@ -395,6 +395,16 @@ export type Sku = {
   updated_at: string
 }
 
+export type SkuComponent = {
+  id: string
+  company_id: string
+  parent_sku_id: string
+  component_sku_id: string
+  quantity: number
+  created_at: string
+  updated_at: string
+}
+
 // ---------------------------------------------------------------------------
 // Bookings
 // ---------------------------------------------------------------------------

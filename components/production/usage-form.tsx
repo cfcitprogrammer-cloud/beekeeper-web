@@ -57,13 +57,59 @@ export function UsageForm({
   )
   const selectedStage =
     pipelineStages.find((stage) => stage.id === stageId) ?? null
-  const stageSkus = selectedStage?.skus ?? []
+  const stageSkus = React.useMemo(
+    () => selectedStage?.skus ?? [],
+    [selectedStage]
+  )
   const selectedSkuIds = React.useMemo(
     () => new Set(lines.map((line) => line.skuId).filter(Boolean)),
     [lines]
   )
   const allSkusSelected =
     stageSkus.length > 0 && stageSkus.every((sku) => selectedSkuIds.has(sku.id))
+
+  // Bill of materials relationships within this entry: which lines are parents
+  // and which are auto-added components of a parent.
+  const bomLinks = React.useMemo(() => {
+    const parents = new Set<string>()
+    const componentToParent = new Map<string, string>()
+    for (const line of lines) {
+      const sku = stageSkus.find((item) => item.id === line.skuId)
+      if (!sku?.components?.length) continue
+      parents.add(sku.id)
+      for (const comp of sku.components) {
+        if (!componentToParent.has(comp.componentSkuId)) {
+          componentToParent.set(comp.componentSkuId, sku.id)
+        }
+      }
+    }
+    return { parents, componentToParent }
+  }, [lines, stageSkus])
+
+  // Group lines into trees: a parent SKU followed by its component lines.
+  const bomGroups = React.useMemo(() => {
+    const groups: { parent: UsageLine; children: UsageLine[] }[] = []
+    const consumed = new Set<string>()
+    for (const line of lines) {
+      if (bomLinks.componentToParent.has(line.skuId)) continue
+      const sku = stageSkus.find((item) => item.id === line.skuId)
+      const compIds = new Set(
+        (sku?.components ?? []).map((c) => c.componentSkuId)
+      )
+      const children = lines.filter(
+        (l) => l.key !== line.key && compIds.has(l.skuId)
+      )
+      groups.push({ parent: line, children })
+      consumed.add(line.key)
+      children.forEach((c) => consumed.add(c.key))
+    }
+    for (const line of lines) {
+      if (consumed.has(line.key)) continue
+      groups.push({ parent: line, children: [] })
+      consumed.add(line.key)
+    }
+    return groups
+  }, [lines, bomLinks, stageSkus])
 
   function choosePipeline(value: string) {
     setPipelineId(value)
@@ -77,9 +123,38 @@ export function UsageForm({
   }
 
   function chooseSku(key: string, skuId: string) {
-    setLines((current) =>
-      current.map((line) => (line.key === key ? { ...line, skuId } : line))
-    )
+    setLines((current) => {
+      const updated = current.map((line) =>
+        line.key === key ? { ...line, skuId } : line
+      )
+
+      if (!skuId) return updated
+      const sku = stageSkus.find((s) => s.id === skuId)
+      if (!sku?.components?.length) return updated
+
+      const existingIds = new Set(
+        updated.map((line) => line.skuId).filter(Boolean)
+      )
+      const parentLine = updated.find((line) => line.key === key)
+      const parentQty = Number(parentLine?.quantity) || 1
+
+      const toAdd: UsageLine[] = []
+      for (const comp of sku.components) {
+        if (existingIds.has(comp.componentSkuId)) continue
+        const compSku = stageSkus.find((s) => s.id === comp.componentSkuId)
+        if (!compSku) continue
+        existingIds.add(comp.componentSkuId)
+        lineCounter.current += 1
+        toAdd.push({
+          key: `usage-line-${lineCounter.current}`,
+          skuId: comp.componentSkuId,
+          quantity: String(parentQty * comp.quantity),
+        })
+      }
+
+      if (toAdd.length === 0) return updated
+      return [...updated, ...toAdd]
+    })
   }
 
   function setQuantity(key: string, quantity: string) {
@@ -133,6 +208,43 @@ export function UsageForm({
         title: "Enter a valid quantity for every selected SKU",
       })
       return
+    }
+
+    // Bill of materials: a parent SKU cannot be submitted unless every one of
+    // its component SKUs is also on the entry with a filled (zero allowed)
+    // quantity.
+    for (const line of selectedLines) {
+      const sku = stageSkus.find((item) => item.id === line.skuId)
+      if (!sku?.components?.length) continue
+      const availableComponents = sku.components.filter((comp) =>
+        stageSkus.some((s) => s.id === comp.componentSkuId)
+      )
+      for (const comp of availableComponents) {
+        const compSku = stageSkus.find((s) => s.id === comp.componentSkuId)
+        const compLine = selectedLines.find(
+          (item) => item.skuId === comp.componentSkuId
+        )
+        if (!compLine) {
+          toast.add({
+            type: "error",
+            title: "Missing component",
+            description: `${sku.sku_code} requires ${compSku?.sku_code ?? "a component"} — add it before saving.`,
+          })
+          return
+        }
+        if (
+          compLine.quantity.trim() === "" ||
+          !Number.isFinite(Number(compLine.quantity)) ||
+          Number(compLine.quantity) < 0
+        ) {
+          toast.add({
+            type: "error",
+            title: "Enter a quantity for the component",
+            description: `${compSku?.sku_code ?? "Component"} quantity is required (zero is allowed).`,
+          })
+          return
+        }
+      }
     }
 
     setSaving(true)
@@ -243,59 +355,98 @@ export function UsageForm({
             </span>
           </div>
 
-          {lines.map((line, index) => {
-            const selectedSku =
-              stageSkus.find((sku) => sku.id === line.skuId) ?? null
+          {bomGroups.map((group) => {
+            const parentSku =
+              stageSkus.find((sku) => sku.id === group.parent.skuId) ?? null
+            const isParent = Boolean(
+              parentSku && (parentSku.components?.length ?? 0) > 0
+            )
+            const renderLine = (
+              line: (typeof lines)[number],
+              opts: { component: boolean; parentSku: typeof parentSku }
+            ) => {
+              const selectedSku =
+                stageSkus.find((sku) => sku.id === line.skuId) ?? null
+              return (
+                <div
+                  key={line.key}
+                  className={
+                    opts.component
+                      ? "grid items-end gap-2 rounded-md border border-l-2 border-l-primary/40 border-primary/20 bg-primary/[0.03] p-2 pl-4 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
+                      : "grid items-end gap-2 rounded-md border p-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
+                  }
+                >
+                  <div className="space-y-1">
+                    {opts.component && opts.parentSku ? (
+                      <span className="inline-flex items-center gap-1 text-[0.5625rem] font-medium text-muted-foreground">
+                        <span className="text-primary">└</span>
+                        Component of {opts.parentSku.sku_code}
+                      </span>
+                    ) : null}
+                    {isParent && !opts.component ? (
+                      <span className="inline-flex items-center gap-1 text-[0.5625rem] font-medium text-primary">
+                        Bill of materials
+                      </span>
+                    ) : null}
+                    <SkuCombobox
+                      skus={stageSkus}
+                      value={line.skuId}
+                      onChange={(skuId) => chooseSku(line.key, skuId)}
+                      usedIds={selectedSkuIds}
+                      disabled={!selectedStage || stageSkus.length === 0}
+                      placeholder={
+                        !selectedStage
+                          ? "Select a stage first"
+                          : stageSkus.length === 0
+                            ? "No SKUs assigned to this stage"
+                            : "Search SKU code, name or brand…"
+                      }
+                      ariaLabel={`SKU line`}
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={line.quantity}
+                      onChange={(event) =>
+                        setQuantity(line.key, event.target.value)
+                      }
+                      disabled={!selectedSku}
+                      placeholder="Quantity"
+                      aria-label={`Quantity for SKU line`}
+                      className="pr-10"
+                    />
+                    <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[0.625rem] text-muted-foreground">
+                      {selectedSku?.uom ?? "—"}
+                    </span>
+                  </div>
+
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => removeLine(line.key)}
+                    disabled={lines.length === 1}
+                    aria-label={`Remove SKU line`}
+                  >
+                    <Trash2 className="size-3.5 text-destructive" />
+                  </Button>
+                </div>
+              )
+            }
 
             return (
-              <div
-                key={line.key}
-                className="grid gap-2 rounded-md border p-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
-              >
-                <SkuCombobox
-                  skus={stageSkus}
-                  value={line.skuId}
-                  onChange={(skuId) => chooseSku(line.key, skuId)}
-                  usedIds={selectedSkuIds}
-                  disabled={!selectedStage || stageSkus.length === 0}
-                  placeholder={
-                    !selectedStage
-                      ? "Select a stage first"
-                      : stageSkus.length === 0
-                        ? "No SKUs assigned to this stage"
-                        : "Search SKU code, name or brand…"
-                  }
-                  ariaLabel={`SKU line ${index + 1}`}
-                />
-
-                <div className="relative">
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={line.quantity}
-                    onChange={(event) =>
-                      setQuantity(line.key, event.target.value)
-                    }
-                    disabled={!selectedSku}
-                    placeholder="Quantity"
-                    aria-label={`Quantity for SKU line ${index + 1}`}
-                    className="pr-10"
-                  />
-                  <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[0.625rem] text-muted-foreground">
-                    {selectedSku?.uom ?? "—"}
-                  </span>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => removeLine(line.key)}
-                  disabled={lines.length === 1}
-                  aria-label={`Remove SKU line ${index + 1}`}
-                >
-                  <Trash2 className="size-3.5 text-destructive" />
-                </Button>
+              <div key={group.parent.key} className="space-y-1.5">
+                {renderLine(group.parent, { component: false, parentSku: null })}
+                {group.children.length > 0 ? (
+                  <div className="ml-3 space-y-1.5 border-l-2 border-primary/20 pl-3">
+                    {group.children.map((child) =>
+                      renderLine(child, { component: true, parentSku: parentSku })
+                    )}
+                  </div>
+                ) : null}
               </div>
             )
           })}

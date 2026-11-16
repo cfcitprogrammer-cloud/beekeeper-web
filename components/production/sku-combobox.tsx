@@ -104,6 +104,11 @@ export function SkuCombobox({
                 <span className="ml-2 shrink-0 rounded-sm bg-muted px-1 py-0.5 text-[0.5625rem] text-muted-foreground">
                   {alreadyUsed ? "Added" : sku.uom}
                 </span>
+                {(sku.components?.length ?? 0) > 0 ? (
+                  <span className="ml-1 shrink-0 rounded-sm bg-primary/10 px-1 py-0.5 text-[0.5625rem] font-medium text-primary">
+                    BOM
+                  </span>
+                ) : null}
               </ComboboxItem>
             )
           }}

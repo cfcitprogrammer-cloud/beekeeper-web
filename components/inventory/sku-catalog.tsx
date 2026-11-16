@@ -80,6 +80,11 @@ export function SkuCatalog({
             <p className="text-xs font-medium">{row.name}</p>
             <p className="font-mono text-[0.625rem] text-muted-foreground">
               {row.sku_code}
+              {row.component_count ? (
+                <span className="ml-1 inline-flex items-center rounded bg-primary/10 px-1 text-[0.5625rem] font-medium text-primary">
+                  BOM · {row.component_count}
+                </span>
+              ) : null}
             </p>
           </div>
         </div>

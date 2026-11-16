@@ -4,11 +4,14 @@ import { Pencil } from "lucide-react"
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { SkuForm } from "@/components/inventory/sku-form"
+import { SkuComponentsManager } from "@/components/inventory/sku-components-manager"
 import { PageHeader } from "@/components/shared/page-header"
 import {
   getInventoryUoms,
   getSku,
   getSkuCategories,
+  getSkuComponents,
+  getSkus,
 } from "@/lib/data/queries"
 
 export default async function EditSkuPage({
@@ -19,10 +22,12 @@ export default async function EditSkuPage({
   const { id } = await params
   await requirePermission(PERMISSIONS.INVENTORY_UPDATE)
 
-  const [skuResult, categoriesResult, uomsResult] = await Promise.all([
+  const [skuResult, categoriesResult, uomsResult, componentsResult, skusResult] = await Promise.all([
     getSku(id),
     getSkuCategories(),
     getInventoryUoms(),
+    getSkuComponents(id),
+    getSkus(),
   ])
   if (!skuResult.data) notFound()
 
@@ -38,6 +43,11 @@ export default async function EditSkuPage({
         sku={skuResult.data}
         categories={categoriesResult.data}
         uoms={uomsResult.data}
+      />
+      <SkuComponentsManager
+        parentId={id}
+        skus={skusResult.data}
+        initialComponents={componentsResult.data}
       />
     </div>
   )

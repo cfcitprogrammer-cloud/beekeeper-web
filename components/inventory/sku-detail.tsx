@@ -4,7 +4,7 @@ import { ArrowLeft, Package, Pencil } from "lucide-react"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/format"
-import type { SkuWithCategory } from "@/types/database"
+import type { SkuComponentWithSku, SkuWithCategory } from "@/types/database"
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === "") return null
@@ -21,9 +21,11 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 export function SkuDetail({
   sku,
   uomLabel,
+  components,
 }: {
   sku: SkuWithCategory
   uomLabel?: string | null
+  components?: SkuComponentWithSku[]
 }) {
   return (
     <div className="space-y-6">
@@ -67,10 +69,39 @@ export function SkuDetail({
             value={sku.created_at ? new Date(sku.created_at).toLocaleString() : null}
           />
           <Field
-            label="Updated"
-            value={sku.updated_at ? new Date(sku.updated_at).toLocaleString() : null}
+            label="Bill of materials"
+            value={
+              components && components.length > 0
+                ? `${components.length} component${components.length === 1 ? "" : "s"}`
+                : "Single item (no components)"
+            }
           />
         </div>
+        {components && components.length > 0 ? (
+          <div className="mt-6">
+            <p className="mb-2 text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
+              Components
+            </p>
+            <div className="space-y-1.5">
+              {components.map((component) => (
+                <div
+                  key={component.id}
+                  className="flex items-center justify-between rounded-md border px-3 py-2 text-xs"
+                >
+                  <span className="min-w-0 truncate">
+                    {component.component?.name ?? "SKU removed"}
+                    <span className="ml-1 font-mono text-[0.625rem] text-muted-foreground">
+                      {component.component?.sku_code ?? "—"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    × {component.quantity} {component.component?.uom ?? ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

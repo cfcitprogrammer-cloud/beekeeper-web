@@ -5,7 +5,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { SkuDetail } from "@/components/inventory/sku-detail"
 import { PageHeader } from "@/components/shared/page-header"
-import { getInventoryUoms, getSku } from "@/lib/data/queries"
+import { getInventoryUoms, getSku, getSkuComponents } from "@/lib/data/queries"
 
 export default async function SkuDetailPage({
   params,
@@ -15,9 +15,10 @@ export default async function SkuDetailPage({
   const { id } = await params
   await requirePermission(PERMISSIONS.INVENTORY_VIEW)
 
-  const [result, uomsResult] = await Promise.all([
+  const [result, uomsResult, componentsResult] = await Promise.all([
     getSku(id),
     getInventoryUoms(),
+    getSkuComponents(id),
   ])
   if (!result.data) notFound()
 
@@ -37,6 +38,7 @@ export default async function SkuDetailPage({
       <SkuDetail
         sku={sku}
         uomLabel={unit ? `${unit.name} (${unit.code})` : null}
+        components={componentsResult.data}
       />
     </div>
   )
