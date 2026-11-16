@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import {
   NativeSelect,
   NativeSelectOption,
@@ -50,6 +51,8 @@ export function ProductionAuditReport({
   const [pipelineId, setPipelineId] = React.useState("")
   const [stageId, setStageId] = React.useState("")
   const [skuId, setSkuId] = React.useState("")
+  const [fromDate, setFromDate] = React.useState("")
+  const [toDate, setToDate] = React.useState("")
 
   const stageOptions = React.useMemo(() => {
     const relevant = pipelineId
@@ -89,18 +92,22 @@ export function ProductionAuditReport({
 
   const filtered = React.useMemo(() => {
     return usage
-      .filter(
-        (line) =>
+      .filter((line) => {
+        const usageDate = line.usage_date.slice(0, 10)
+        return (
           (!pipelineId || line.pipeline_id === pipelineId) &&
           (!stageId || line.stage_id === stageId) &&
-          (!skuId || line.sku_id === skuId)
-      )
+          (!skuId || line.sku_id === skuId) &&
+          (!fromDate || usageDate >= fromDate) &&
+          (!toDate || usageDate <= toDate)
+        )
+      })
       .sort(
         (a, b) =>
           b.usage_date.localeCompare(a.usage_date) ||
           b.recorded_at.localeCompare(a.recorded_at)
       )
-  }, [usage, pipelineId, stageId, skuId])
+  }, [usage, pipelineId, stageId, skuId, fromDate, toDate])
 
   const batchCount = new Set(
     filtered.map((line) => line.batch_id || line.id)
@@ -111,7 +118,10 @@ export function ProductionAuditReport({
       .filter((id): id is string => Boolean(id))
   ).size
   const stageCount = new Set(filtered.map((line) => line.stage_id)).size
-  const hasFilters = Boolean(pipelineId || stageId || skuId)
+  const hasFilters = Boolean(
+    pipelineId || stageId || skuId || fromDate || toDate
+  )
+  const invalidDateRange = Boolean(fromDate && toDate && fromDate > toDate)
 
   function changePipeline(value: string) {
     setPipelineId(value)
@@ -128,6 +138,8 @@ export function ProductionAuditReport({
     setPipelineId("")
     setStageId("")
     setSkuId("")
+    setFromDate("")
+    setToDate("")
   }
 
   const columns: DataTableColumn<ProductionUsageWithRelations>[] = [
@@ -272,12 +284,12 @@ export function ProductionAuditReport({
             Report filters
           </CardTitle>
           <CardDescription>
-            Choose a pipeline, stage or SKU to narrow the audit table. Leave a
-            filter on “All” to include everything.
+            Choose a pipeline, stage, SKU or date range to narrow the audit
+            table. Leave a filter on “All” to include everything.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="space-y-1.5">
               <Label htmlFor="audit-pipeline">Pipeline</Label>
               <NativeSelect
@@ -336,14 +348,47 @@ export function ProductionAuditReport({
                 ))}
               </NativeSelect>
             </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-from">From date</Label>
+              <Input
+                id="audit-from"
+                type="date"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(event) => setFromDate(event.target.value)}
+                className="w-full"
+                aria-invalid={invalidDateRange}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-to">To date</Label>
+              <Input
+                id="audit-to"
+                type="date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(event) => setToDate(event.target.value)}
+                className="w-full"
+                aria-invalid={invalidDateRange}
+              />
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[0.625rem] text-muted-foreground">
-              Showing {filtered.length} usage line
-              {filtered.length === 1 ? "" : "s"}
-              {hasFilters ? " for the selected filters." : "."}
-            </p>
+            <div className="space-y-0.5">
+              <p className="text-[0.625rem] text-muted-foreground">
+                Showing {filtered.length} usage line
+                {filtered.length === 1 ? "" : "s"}
+                {hasFilters ? " for the selected filters." : "."}
+              </p>
+              {invalidDateRange ? (
+                <p className="text-[0.625rem] text-destructive">
+                  The “from” date must be on or before the “to” date.
+                </p>
+              ) : null}
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -381,7 +426,7 @@ export function ProductionAuditReport({
         searchPlaceholder="Search the audit result…"
         pageSize={15}
         emptyTitle="No usage matches these filters"
-        emptyDescription="Try a different pipeline, stage or SKU, or clear the filters to see all recorded usage."
+        emptyDescription="Try a different pipeline, stage, SKU or date range, or clear the filters to see all recorded usage."
         emptyIcon={ClipboardList}
         initialSort={{ id: "date", desc: true }}
       />

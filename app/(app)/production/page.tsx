@@ -50,7 +50,7 @@ const sections = [
   },
   {
     title: "Audit report",
-    description: "Filter usage by pipeline, stage and SKU.",
+    description: "Filter usage by pipeline, stage, SKU and date.",
     href: "/production/audit",
     icon: ClipboardList,
   },

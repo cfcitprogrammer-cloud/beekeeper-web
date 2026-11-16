@@ -24,7 +24,7 @@ export default async function ProductionAuditPage() {
       <PageHeader
         eyebrow="Production"
         title="Audit report"
-        description="Filter SKU-level production usage by pipeline, stage and SKU, then review the matching usage lines."
+        description="Filter SKU-level production usage by pipeline, stage, SKU and date range, then review the matching usage lines."
         icon={ClipboardList}
       />
 
