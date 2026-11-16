@@ -6,6 +6,7 @@ import {
   failure,
   getAuthorizedContext,
   type ActionResult,
+  type AuthorizedActionContext,
 } from "@/actions/helpers/context"
 import { PERMISSIONS } from "@/lib/auth/permissions"
 
@@ -15,13 +16,58 @@ export type CreateSkuInput = {
   categoryId?: string
   barcode?: string
   brand?: string
-  uom: string
+  /** Unit code. Prefer `uomId` so the master record is the source of truth. */
+  uom?: string
+  uomId?: string
   unitPrice: number
   taxRate: number
   isActive: boolean
 }
 
 export type UpdateSkuInput = CreateSkuInput & { id: string }
+
+/**
+ * Resolve the SKU unit of measure against the company's UOM master data.
+ * Returns the code that is snapshotted on the SKU plus the master record id.
+ */
+async function resolveUom(
+  supabase: AuthorizedActionContext["supabase"],
+  companyId: string,
+  input: Pick<CreateSkuInput, "uom" | "uomId">
+): Promise<
+  { ok: true; uom: string; uomId: string | null } | { ok: false; error: string }
+> {
+  if (input.uomId) {
+    const { data, error } = await supabase
+      .from("inventory_uoms")
+      .select("id, code")
+      .eq("id", input.uomId)
+      .eq("company_id", companyId)
+      .maybeSingle()
+
+    if (error) {
+      console.error("[action:resolveUom]", error)
+      return { ok: false, error: error.message }
+    }
+    if (!data) {
+      return { ok: false, error: "Select a valid unit of measure." }
+    }
+
+    return { ok: true, uom: data.code, uomId: data.id }
+  }
+
+  const code = input.uom?.trim().toUpperCase() ?? ""
+  if (!code) return { ok: false, error: "Unit of measure is required." }
+
+  const { data } = await supabase
+    .from("inventory_uoms")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("code", code)
+    .maybeSingle()
+
+  return { ok: true, uom: code, uomId: data?.id ?? null }
+}
 
 export async function updateSku(
   input: UpdateSkuInput
@@ -36,6 +82,9 @@ export async function updateSku(
 
   const { supabase, companyId } = authorized.context
 
+  const uomResult = await resolveUom(supabase, companyId, input)
+  if (!uomResult.ok) return failure(uomResult.error)
+
   const { data, error } = await supabase
     .from("skus")
     .update({
@@ -44,7 +93,8 @@ export async function updateSku(
       name: input.name.trim(),
       category_id: input.categoryId || null,
       brand: input.brand?.trim() || null,
-      uom: input.uom,
+      uom: uomResult.uom,
+      uom_id: uomResult.uomId,
       unit_price: input.unitPrice,
       tax_rate: input.taxRate,
       is_active: input.isActive,
@@ -100,6 +150,9 @@ export async function createSku(
 
   const { supabase, companyId } = authorized.context
 
+  const uomResult = await resolveUom(supabase, companyId, input)
+  if (!uomResult.ok) return failure(uomResult.error)
+
   const { data, error } = await supabase
     .from("skus")
     .insert({
@@ -109,7 +162,8 @@ export async function createSku(
       name: input.name.trim(),
       category_id: input.categoryId || null,
       brand: input.brand?.trim() || null,
-      uom: input.uom,
+      uom: uomResult.uom,
+      uom_id: uomResult.uomId,
       unit_price: input.unitPrice,
       tax_rate: input.taxRate,
       is_active: input.isActive,

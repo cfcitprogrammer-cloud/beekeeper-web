@@ -204,6 +204,34 @@ begin
         created_by = excluded.created_by,
         updated_at = now();
 
+  -- --------------------------------------------------------------------------
+  -- 2b. Inventory units of measure (SKU master data)
+  -- --------------------------------------------------------------------------
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'inventory_uoms'
+  ) then
+    insert into public.inventory_uoms (company_id, code, name)
+    values
+      (v_company_id, 'PCS', 'Pieces'),
+      (v_company_id, 'PACK', 'Pack'),
+      (v_company_id, 'BOTTLE', 'Bottle'),
+      (v_company_id, 'CAN', 'Can'),
+      (v_company_id, 'BOX', 'Box'),
+      (v_company_id, 'CARTON', 'Carton'),
+      (v_company_id, 'BAR', 'Bar'),
+      (v_company_id, 'TUBE', 'Tube'),
+      (v_company_id, 'JAR', 'Jar'),
+      (v_company_id, 'TUB', 'Tub'),
+      (v_company_id, 'KG', 'Kilogram'),
+      (v_company_id, 'G', 'Gram'),
+      (v_company_id, 'L', 'Liter'),
+      (v_company_id, 'ML', 'Milliliter')
+    on conflict (company_id, code) do nothing;
+  end if;
+
   -- ==========================================================================
   -- 3. Workspace
   -- ==========================================================================

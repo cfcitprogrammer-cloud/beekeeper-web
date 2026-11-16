@@ -5,7 +5,11 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { SkuForm } from "@/components/inventory/sku-form"
 import { PageHeader } from "@/components/shared/page-header"
-import { getSku, getSkuCategories } from "@/lib/data/queries"
+import {
+  getInventoryUoms,
+  getSku,
+  getSkuCategories,
+} from "@/lib/data/queries"
 
 export default async function EditSkuPage({
   params,
@@ -15,9 +19,10 @@ export default async function EditSkuPage({
   const { id } = await params
   await requirePermission(PERMISSIONS.INVENTORY_UPDATE)
 
-  const [skuResult, categoriesResult] = await Promise.all([
+  const [skuResult, categoriesResult, uomsResult] = await Promise.all([
     getSku(id),
     getSkuCategories(),
+    getInventoryUoms(),
   ])
   if (!skuResult.data) notFound()
 
@@ -29,7 +34,11 @@ export default async function EditSkuPage({
         description={`Update details for ${skuResult.data.name}.`}
         icon={Pencil}
       />
-      <SkuForm sku={skuResult.data} categories={categoriesResult.data} />
+      <SkuForm
+        sku={skuResult.data}
+        categories={categoriesResult.data}
+        uoms={uomsResult.data}
+      />
     </div>
   )
 }

@@ -178,6 +178,7 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: PermissionKey }[] = [
   { prefix: "/outlets", permission: PERMISSIONS.OUTLETS_VIEW },
   { prefix: "/inventory/skus/new", permission: PERMISSIONS.INVENTORY_CREATE },
   { prefix: "/inventory/categories/new", permission: PERMISSIONS.INVENTORY_CREATE },
+  { prefix: "/inventory/uoms/new", permission: PERMISSIONS.INVENTORY_CREATE },
   { prefix: "/inventory", permission: PERMISSIONS.INVENTORY_VIEW },
   { prefix: "/bookings/new", permission: PERMISSIONS.BOOKINGS_CREATE },
   { prefix: "/bookings", permission: PERMISSIONS.BOOKINGS_VIEW },

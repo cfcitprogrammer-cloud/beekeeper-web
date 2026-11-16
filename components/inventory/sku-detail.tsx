@@ -18,7 +18,13 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-export function SkuDetail({ sku }: { sku: SkuWithCategory }) {
+export function SkuDetail({
+  sku,
+  uomLabel,
+}: {
+  sku: SkuWithCategory
+  uomLabel?: string | null
+}) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
@@ -53,7 +59,7 @@ export function SkuDetail({ sku }: { sku: SkuWithCategory }) {
           <Field label="Category" value={sku.category?.name ?? null} />
           <Field label="Brand" value={sku.brand} />
           <Field label="Barcode" value={sku.barcode} />
-          <Field label="Unit of measure" value={sku.uom} />
+          <Field label="Unit of measure" value={uomLabel ?? sku.uom} />
           <Field label="Selling price" value={formatCurrency(sku.unit_price)} />
           <Field label="Tax rate" value={`${sku.tax_rate}%`} />
           <Field

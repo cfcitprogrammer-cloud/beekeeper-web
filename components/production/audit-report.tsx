@@ -1,25 +1,53 @@
 "use client"
 
 import * as React from "react"
-import { ClipboardList, FilterX, FlaskConical, Layers, Tags } from "lucide-react"
+import {
+  ChevronDown,
+  ClipboardList,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  FilterX,
+  FlaskConical,
+  Layers,
+  Loader2,
+  Tags,
+} from "lucide-react"
 
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { MetricCard } from "@/components/shared/metric-card"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select"
+import { toast } from "@/components/ui/toast"
 import { formatDate, formatNumber, formatTime } from "@/lib/format"
+import {
+  exportAuditCsv,
+  exportAuditExcel,
+  exportAuditPdf,
+  type AuditExportMeta,
+  type AuditExportRow,
+} from "@/lib/production/audit-export"
 import type {
   ProductionSkuSummary,
   ProductionStageWithRelations,
@@ -43,16 +71,27 @@ export function ProductionAuditReport({
   pipelines,
   stages,
   usage,
+  companyName = "Beekeeper",
+  companyLegalName,
+  companyAddress,
+  preparedBy = "",
 }: {
   pipelines: PipelineOption[]
   stages: ProductionStageWithRelations[]
   usage: ProductionUsageWithRelations[]
+  companyName?: string
+  companyLegalName?: string | null
+  companyAddress?: string | null
+  preparedBy?: string
 }) {
   const [pipelineId, setPipelineId] = React.useState("")
   const [stageId, setStageId] = React.useState("")
   const [skuId, setSkuId] = React.useState("")
   const [fromDate, setFromDate] = React.useState("")
   const [toDate, setToDate] = React.useState("")
+  const [exporting, setExporting] = React.useState<
+    "pdf" | "excel" | "csv" | null
+  >(null)
 
   const stageOptions = React.useMemo(() => {
     const relevant = pipelineId
@@ -140,6 +179,103 @@ export function ProductionAuditReport({
     setSkuId("")
     setFromDate("")
     setToDate("")
+  }
+
+  const exportRows = React.useMemo<AuditExportRow[]>(
+    () =>
+      filtered.map((line) => ({
+        usageDate: line.usage_date.slice(0, 10),
+        recordedAt: line.recorded_at,
+        pipeline: line.pipeline?.name ?? "—",
+        pipelineCode: line.pipeline?.code ?? "—",
+        stage: line.stage?.name ?? "Stage removed",
+        stageSequence: line.stage?.sequence ?? null,
+        sku: line.sku?.name ?? "No SKU",
+        skuCode: line.sku?.sku_code ?? "—",
+        quantity: line.quantity,
+        uom: line.uom ?? line.sku?.uom ?? "",
+        submitter: line.submitter
+          ? `${line.submitter.first_name} ${line.submitter.last_name}`
+          : line.submitted_by
+            ? `User ${line.submitted_by.slice(0, 8)}`
+            : "Unknown user",
+        employeeNo: line.submitter?.employee_no ?? "",
+        notes: line.notes ?? "",
+      })),
+    [filtered]
+  )
+
+  function buildExportMeta(): AuditExportMeta {
+    const pipeline = pipelines.find((item) => item.id === pipelineId)
+    const stage = stages.find((item) => item.id === stageId)
+    const sku = skuOptions.find((item) => item.id === skuId)
+
+    return {
+      companyName,
+      companyLegalName,
+      companyAddress,
+      preparedBy,
+      generatedAt: new Date(),
+      filters: {
+        pipeline: pipeline ? `${pipeline.name} (${pipeline.code})` : "",
+        stage: stage
+          ? `${stage.pipeline?.name ? `${stage.pipeline.name} · ` : ""}${
+              stage.sequence
+            }. ${stage.name}`
+          : "",
+        sku: sku ? `${sku.sku_code} · ${sku.name}` : "",
+        fromDate,
+        toDate,
+      },
+      summary: {
+        lines: filtered.length,
+        submissions: batchCount,
+        skus: skuCount,
+        stages: stageCount,
+      },
+    }
+  }
+
+  async function handleExport(format: "pdf" | "excel" | "csv") {
+    if (invalidDateRange) {
+      toast.add({
+        type: "error",
+        title: "Invalid date range",
+        description: "The “from” date must be on or before the “to” date.",
+      })
+      return
+    }
+
+    const meta = buildExportMeta()
+    setExporting(format)
+
+    try {
+      if (format === "csv") {
+        exportAuditCsv(exportRows, meta)
+      } else if (format === "excel") {
+        await exportAuditExcel(exportRows, meta)
+      } else {
+        await exportAuditPdf(exportRows, meta)
+      }
+
+      const label = format === "pdf" ? "PDF" : format === "excel" ? "Excel" : "CSV"
+      toast.add({
+        type: "success",
+        title: `${label} export ready`,
+        description: `${exportRows.length} usage line${
+          exportRows.length === 1 ? "" : "s"
+        } included.`,
+      })
+    } catch (error) {
+      console.error("[audit:export]", error)
+      toast.add({
+        type: "error",
+        title: "Export failed",
+        description: "The report could not be generated. Please try again.",
+      })
+    } finally {
+      setExporting(null)
+    }
   }
 
   const columns: DataTableColumn<ProductionUsageWithRelations>[] = [
@@ -287,6 +423,68 @@ export function ProductionAuditReport({
             Choose a pipeline, stage, SKU or date range to narrow the audit
             table. Leave a filter on “All” to include everything.
           </CardDescription>
+          <CardAction>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={exporting !== null || invalidDateRange}
+                  />
+                }
+              >
+                {exporting ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Download />
+                )}
+                {exporting ? "Preparing…" : "Export"}
+                {exporting ? null : <ChevronDown className="size-3" />}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuLabel>Export this report</DropdownMenuLabel>
+                <DropdownMenuItem
+                  className="gap-2"
+                  onClick={() => void handleExport("pdf")}
+                >
+                  <FileText className="size-3.5 text-rose-500" />
+                  <span className="flex-1">PDF report</span>
+                  <span className="text-[0.5625rem] text-muted-foreground">
+                    Print-ready
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2"
+                  onClick={() => void handleExport("excel")}
+                >
+                  <FileSpreadsheet className="size-3.5 text-emerald-600" />
+                  <span className="flex-1">Excel workbook</span>
+                  <span className="text-[0.5625rem] text-muted-foreground">
+                    .xlsx
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2"
+                  onClick={() => void handleExport("csv")}
+                >
+                  <Download className="size-3.5 text-sky-600" />
+                  <span className="flex-1">CSV file</span>
+                  <span className="text-[0.5625rem] text-muted-foreground">
+                    .csv
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[0.5625rem] leading-relaxed">
+                  {invalidDateRange
+                    ? "Fix the date range before exporting."
+                    : `${filtered.length} usage line${
+                        filtered.length === 1 ? "" : "s"
+                      } with the current filters`}
+                </DropdownMenuLabel>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </CardAction>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

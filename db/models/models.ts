@@ -365,6 +365,17 @@ export type SkuCategory = {
   created_at: string
 }
 
+export type InventoryUom = {
+  id: string
+  company_id: string
+  code: string
+  name: string
+  description: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type Sku = {
   id: string
   company_id: string
@@ -375,6 +386,7 @@ export type Sku = {
   category_id: string | null
   brand: string | null
   uom: string
+  uom_id: string | null
   unit_price: number
   tax_rate: number
   photo_path: string | null

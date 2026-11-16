@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, FlaskConical, Plus, Trash2, UserRound } from "lucide-react"
 
 import { createProductionUsage } from "@/actions/production.action"
+import { SkuCombobox } from "@/components/production/sku-combobox"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
+import { formatNumber } from "@/lib/format"
 import type {
   ProductionPipelineWithRelations,
   ProductionStageWithRelations,
@@ -56,7 +58,10 @@ export function UsageForm({
   const selectedStage =
     pipelineStages.find((stage) => stage.id === stageId) ?? null
   const stageSkus = selectedStage?.skus ?? []
-  const selectedSkuIds = new Set(lines.map((line) => line.skuId).filter(Boolean))
+  const selectedSkuIds = React.useMemo(
+    () => new Set(lines.map((line) => line.skuId).filter(Boolean)),
+    [lines]
+  )
   const allSkusSelected =
     stageSkus.length > 0 && stageSkus.every((sku) => selectedSkuIds.has(sku.id))
 
@@ -228,7 +233,13 @@ export function UsageForm({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label>SKUs and quantities</Label>
             <span className="text-[0.625rem] text-muted-foreground">
-              {lines.filter((line) => line.skuId).length} SKU(s) selected
+              {selectedStage && stageSkus.length > 0
+                ? `${formatNumber(stageSkus.length)} SKU${
+                    stageSkus.length === 1 ? "" : "s"
+                  } on this stage · `
+                : ""}
+              {lines.filter((line) => line.skuId).length} selected · type to
+              search
             </span>
           </div>
 
@@ -241,35 +252,21 @@ export function UsageForm({
                 key={line.key}
                 className="grid gap-2 rounded-md border p-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
               >
-                <NativeSelect
+                <SkuCombobox
+                  skus={stageSkus}
                   value={line.skuId}
-                  onChange={(event) =>
-                    chooseSku(line.key, event.target.value)
-                  }
-                  className="w-full"
+                  onChange={(skuId) => chooseSku(line.key, skuId)}
+                  usedIds={selectedSkuIds}
                   disabled={!selectedStage || stageSkus.length === 0}
-                  aria-label={`SKU line ${index + 1}`}
-                >
-                  <option value="">
-                    {!selectedStage
+                  placeholder={
+                    !selectedStage
                       ? "Select a stage first"
                       : stageSkus.length === 0
                         ? "No SKUs assigned to this stage"
-                        : "Select SKU"}
-                  </option>
-                  {stageSkus.map((sku) => (
-                    <option
-                      key={sku.id}
-                      value={sku.id}
-                      disabled={lines.some(
-                        (other) =>
-                          other.key !== line.key && other.skuId === sku.id
-                      )}
-                    >
-                      {sku.sku_code} · {sku.name} ({sku.uom})
-                    </option>
-                  ))}
-                </NativeSelect>
+                        : "Search SKU code, name or brand…"
+                  }
+                  ariaLabel={`SKU line ${index + 1}`}
+                />
 
                 <div className="relative">
                   <Input

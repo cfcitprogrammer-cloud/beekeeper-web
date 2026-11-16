@@ -69,13 +69,10 @@ function ComboboxInput({
       />
       <InputGroupAddon align="inline-end">
         {showTrigger && (
-          <InputGroupButton
-            size="icon-xs"
-            variant="ghost"
-            render={<ComboboxTrigger />}
-            data-slot="input-group-button"
-            className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
+          <ComboboxTrigger
             disabled={disabled}
+            aria-label="Open popup"
+            className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent size-6 p-0 has-[>svg]:p-0 rounded-sm hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-2.5 flex items-center justify-center"
           />
         )}
         {showClear && <ComboboxClear disabled={disabled} />}

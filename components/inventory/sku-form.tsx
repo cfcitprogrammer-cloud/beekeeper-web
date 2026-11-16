@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Plus, Save } from "lucide-react"
 
@@ -10,8 +11,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
-import { humanize } from "@/lib/format"
-import type { SkuCategory, SkuWithCategory } from "@/types/database"
+import type {
+  InventoryUom,
+  SkuCategory,
+  SkuWithCategory,
+} from "@/types/database"
 
 const emptyDraft = {
   name: "",
@@ -19,7 +23,7 @@ const emptyDraft = {
   category_id: "",
   brand: "",
   barcode: "",
-  uom: "PACK",
+  uom_id: "",
   unit_price: "0",
   tax_rate: "12",
   is_active: "true",
@@ -28,9 +32,11 @@ const emptyDraft = {
 export function SkuForm({
   sku,
   categories,
+  uoms,
 }: {
   sku?: SkuWithCategory | null
   categories: SkuCategory[]
+  uoms: InventoryUom[]
 }) {
   const router = useRouter()
   const editingId = sku?.id ?? null
@@ -43,13 +49,23 @@ export function SkuForm({
           category_id: sku.category_id ?? "",
           brand: sku.brand ?? "",
           barcode: sku.barcode ?? "",
-          uom: sku.uom,
+          uom_id:
+            sku.uom_id ??
+            uoms.find((uom) => uom.code === sku.uom)?.id ??
+            "",
           unit_price: String(sku.unit_price),
           tax_rate: String(sku.tax_rate),
           is_active: sku.is_active ? "true" : "false",
         }
       : { ...emptyDraft, category_id: categories[0]?.id ?? "" }
   )
+
+  const uomOptions = React.useMemo(() => {
+    const active = uoms.filter((uom) => uom.is_active)
+    const selected = uoms.find((uom) => uom.id === draft.uom_id)
+    if (!selected || selected.is_active) return active
+    return [...active, selected]
+  }, [uoms, draft.uom_id])
 
   async function saveSkuHandler() {
     if (!draft.name.trim() || !draft.sku_code.trim()) {
@@ -61,6 +77,15 @@ export function SkuForm({
       return
     }
 
+    if (!draft.uom_id) {
+      toast.add({
+        type: "error",
+        title: "Missing details",
+        description: "Select a unit of measure for this SKU.",
+      })
+      return
+    }
+
     setSaving(true)
     const payload = {
       name: draft.name,
@@ -68,7 +93,7 @@ export function SkuForm({
       categoryId: draft.category_id || undefined,
       brand: draft.brand,
       barcode: draft.barcode,
-      uom: draft.uom,
+      uomId: draft.uom_id,
       unitPrice: Number(draft.unit_price) || 0,
       taxRate: Number(draft.tax_rate) || 0,
       isActive: draft.is_active === "true",
@@ -165,21 +190,35 @@ export function SkuForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="sku-uom">Unit of measure</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="sku-uom">Unit of measure</Label>
+              <Link
+                href="/inventory/uoms"
+                className="text-[0.625rem] font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Manage units
+              </Link>
+            </div>
             <NativeSelect
               id="sku-uom"
-              value={draft.uom}
-              onChange={(event) => setDraft({ ...draft, uom: event.target.value })}
+              value={draft.uom_id}
+              onChange={(event) => setDraft({ ...draft, uom_id: event.target.value })}
               className="w-full"
+              disabled={uomOptions.length === 0}
             >
-              {["PACK", "BOTTLE", "CAN", "BOX", "CARTON", "BAR", "TUBE", "JAR", "TUB"].map(
-                (value) => (
-                  <option key={value} value={value}>
-                    {humanize(value)}
-                  </option>
-                )
-              )}
+              <option value="">
+                {uomOptions.length === 0 ? "No units configured" : "Select unit"}
+              </option>
+              {uomOptions.map((uom) => (
+                <option key={uom.id} value={uom.id}>
+                  {uom.name} ({uom.code})
+                  {uom.is_active ? "" : " · inactive"}
+                </option>
+              ))}
             </NativeSelect>
+            <p className="text-[0.625rem] text-muted-foreground">
+              Units come from the inventory master data.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="sku-price">Selling price (PHP)</Label>

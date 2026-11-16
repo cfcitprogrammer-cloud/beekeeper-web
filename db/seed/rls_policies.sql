@@ -159,6 +159,7 @@ declare
     'leave_requests',
     'outlets',
     'sku_categories',
+    'inventory_uoms',
     'skus',
     'bookings',
     'booking_lines',

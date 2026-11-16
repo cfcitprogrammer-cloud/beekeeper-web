@@ -453,6 +453,17 @@ export interface SkuCategory {
   created_at: ISODateTime
 }
 
+export interface InventoryUom {
+  id: UUID
+  company_id: UUID
+  code: string
+  name: string
+  description: string | null
+  is_active: boolean
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
 export interface Sku {
   id: UUID
   company_id: UUID
@@ -463,6 +474,7 @@ export interface Sku {
   category_id: UUID | null
   brand: string | null
   uom: string
+  uom_id: UUID | null
   unit_price: number
   tax_rate: number
   photo_path: string | null
@@ -943,6 +955,7 @@ export type Database = {
       visits: TableDefinition<Db.Visit>
       activity_feed: TableDefinition<Db.ActivityFeed>
       sku_categories: TableDefinition<Db.SkuCategory>
+      inventory_uoms: TableDefinition<Db.InventoryUom>
       skus: TableDefinition<Db.Sku>
       bookings: TableDefinition<Db.Booking>
       booking_lines: TableDefinition<Db.BookingLine>

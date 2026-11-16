@@ -333,6 +333,11 @@ export const navSections: NavSection[] = [
             href: "/inventory/categories",
             permission: PERMISSIONS.INVENTORY_VIEW,
           },
+          {
+            title: "Units of measure",
+            href: "/inventory/uoms",
+            permission: PERMISSIONS.INVENTORY_VIEW,
+          },
         ],
       },
       {

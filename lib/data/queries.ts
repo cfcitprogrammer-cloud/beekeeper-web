@@ -20,6 +20,7 @@ import type {
   LeaveBalanceWithRelations,
   LeaveRequestWithRelations,
   Holiday,
+  InventoryUom,
   LeaveType,
   MyPendingApproval,
   OutletWithRelations,
@@ -1194,6 +1195,31 @@ export async function getOutlet(
     status: mapOutletStatus(row),
     approval_status: mapDocumentApprovalStatus(row.status),
   })
+}
+
+export async function getInventoryUoms(): Promise<QueryResult<InventoryUom[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("inventory_uoms")
+    .select("*")
+    .order("name")
+
+  logError("inventory-uoms", error)
+  return empty((data as InventoryUom[] | null) ?? [])
+}
+
+export async function getInventoryUom(
+  id: string
+): Promise<QueryResult<InventoryUom | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("inventory_uoms")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("inventory-uom", error)
+  return empty((data as InventoryUom | null) ?? null)
 }
 
 export async function getSkuCategories(): Promise<QueryResult<SkuCategory[]>> {

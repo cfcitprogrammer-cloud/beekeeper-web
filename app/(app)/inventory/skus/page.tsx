@@ -5,17 +5,19 @@ import { requirePermission } from "@/lib/auth/guards"
 import { SkuCatalog } from "@/components/inventory/sku-catalog"
 import { MetricCard } from "@/components/shared/metric-card"
 import { PageHeader } from "@/components/shared/page-header"
-import { getSkuCategories, getSkus } from "@/lib/data/queries"
+import { getSkuCategories, getInventoryUoms, getSkus } from "@/lib/data/queries"
 import { formatCurrency } from "@/lib/format"
 
 export default async function SkuCatalogPage() {
-  const [, skusResult, categoriesResult] = await Promise.all([
+  const [, skusResult, categoriesResult, uomsResult] = await Promise.all([
     requirePermission(PERMISSIONS.INVENTORY_VIEW),
     getSkus(),
     getSkuCategories(),
+    getInventoryUoms(),
   ])
   const skus = skusResult.data
   const categories = categoriesResult.data
+  const uoms = uomsResult.data
 
   const active = skus.filter((sku) => sku.is_active)
   const averagePrice = skus.length
@@ -62,7 +64,7 @@ export default async function SkuCatalogPage() {
         />
       </div>
 
-      <SkuCatalog skus={skus} categories={categories} />
+      <SkuCatalog skus={skus} categories={categories} uoms={uoms} />
     </div>
   )
 }

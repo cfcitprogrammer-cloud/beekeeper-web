@@ -11,7 +11,7 @@ import {
 } from "@/lib/data/operations"
 
 export default async function ProductionAuditPage() {
-  await requirePermission(PERMISSIONS.PRODUCTION_VIEW)
+  const access = await requirePermission(PERMISSIONS.PRODUCTION_VIEW)
 
   const [pipelinesResult, stagesResult, usageResult] = await Promise.all([
     getProductionPipelines(),
@@ -32,6 +32,10 @@ export default async function ProductionAuditPage() {
         pipelines={pipelinesResult.data}
         stages={stagesResult.data}
         usage={usageResult.data}
+        companyName={access.company?.name ?? "Beekeeper"}
+        companyLegalName={access.company?.legal_name ?? null}
+        companyAddress={access.company?.address ?? null}
+        preparedBy={access.user?.name ?? ""}
       />
     </div>
   )

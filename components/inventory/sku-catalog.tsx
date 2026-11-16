@@ -12,18 +12,36 @@ import { Button } from "@/components/ui/button"
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
 import { formatCurrency } from "@/lib/format"
-import type { SkuCategory, SkuWithCategory } from "@/types/database"
+import type { InventoryUom, SkuCategory, SkuWithCategory } from "@/types/database"
 
 export function SkuCatalog({
   skus,
   categories,
+  uoms,
 }: {
   skus: SkuWithCategory[]
   categories: SkuCategory[]
+  uoms: InventoryUom[]
 }) {
   const router = useRouter()
   const [categoryId, setCategoryId] = React.useState("all")
   const [status, setStatus] = React.useState("all")
+  const [uomId, setUomId] = React.useState("all")
+
+  const uomById = React.useMemo(
+    () => new Map(uoms.map((uom) => [uom.id, uom])),
+    [uoms]
+  )
+  const uomByCode = React.useMemo(
+    () => new Map(uoms.map((uom) => [uom.code, uom])),
+    [uoms]
+  )
+  const unitFor = React.useCallback(
+    (sku: SkuWithCategory) =>
+      (sku.uom_id ? uomById.get(sku.uom_id) : undefined) ??
+      uomByCode.get(sku.uom),
+    [uomById, uomByCode]
+  )
 
   const filtered = React.useMemo(
     () =>
@@ -31,9 +49,10 @@ export function SkuCatalog({
         if (categoryId !== "all" && sku.category_id !== categoryId) return false
         if (status === "active" && !sku.is_active) return false
         if (status === "inactive" && sku.is_active) return false
+        if (uomId !== "all" && unitFor(sku)?.id !== uomId) return false
         return true
       }),
-    [skus, categoryId, status]
+    [skus, categoryId, status, uomId, unitFor]
   )
 
   async function deleteSkuHandler(id: string, name: string) {
@@ -85,10 +104,20 @@ export function SkuCatalog({
       id: "uom",
       header: "UOM",
       hideBelow: "lg",
-      sortValue: (row) => row.uom,
-      cell: (row) => (
-        <span className="text-[0.625rem] text-muted-foreground">{row.uom}</span>
-      ),
+      sortValue: (row) => unitFor(row)?.code ?? row.uom,
+      cell: (row) => {
+        const unit = unitFor(row)
+        return (
+          <div>
+            <p className="text-[0.625rem] text-muted-foreground">
+              {unit?.name ?? row.uom}
+            </p>
+            <p className="font-mono text-[0.625rem] text-muted-foreground/70">
+              {unit?.code ?? row.uom}
+            </p>
+          </div>
+        )
+      },
     },
     {
       id: "price",
@@ -166,7 +195,14 @@ export function SkuCatalog({
       columns={columns}
       getRowId={(row) => row.id}
       searchable={(row) =>
-        [row.name, row.sku_code, row.category?.name, row.brand, row.uom]
+        [
+          row.name,
+          row.sku_code,
+          row.category?.name,
+          row.brand,
+          row.uom,
+          unitFor(row)?.name,
+        ]
           .filter(Boolean)
           .join(" ")
       }
@@ -199,6 +235,18 @@ export function SkuCatalog({
             <option value="all">All statuses</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
+          </NativeSelect>
+          <NativeSelect
+            value={uomId}
+            onChange={(event) => setUomId(event.target.value)}
+            aria-label="Filter by unit of measure"
+          >
+            <option value="all">All units</option>
+            {uoms.map((uom) => (
+              <option key={uom.id} value={uom.id}>
+                {uom.name} ({uom.code})
+              </option>
+            ))}
           </NativeSelect>
         </>
       }
