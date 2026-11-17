@@ -30,12 +30,13 @@ export async function createLeaveType(
   const authorized = await getAuthorizedContext(PERMISSIONS.LEAVE_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("leave_types")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       name: input.name.trim(),
       code: input.code.trim().toUpperCase(),
       is_paid: input.isPaid,
@@ -67,7 +68,7 @@ export async function updateLeaveType(
   const authorized = await getAuthorizedContext(PERMISSIONS.LEAVE_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("leave_types")
@@ -102,7 +103,7 @@ export async function deleteLeaveType(
   const authorized = await getAuthorizedContext(PERMISSIONS.LEAVE_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("leave_types")

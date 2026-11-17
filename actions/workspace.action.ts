@@ -1,5 +1,6 @@
 "use server"
 
+import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 
 import {
@@ -11,8 +12,6 @@ import {
   WorkspaceFormValues,
   workspaceSchema,
 } from "@/db/schema/workspace.schema"
-import { getAccessContext } from "@/lib/auth/access"
-import { PERMISSIONS } from "@/lib/auth/permissions"
 import { createClient } from "@/utils/supabase/server"
 
 function isSuperAdminRole(role: string | null | undefined) {
@@ -192,4 +191,42 @@ export async function deleteWorkspace(id: string): Promise<ActionResult<{ id: st
   revalidatePath("/workspaces")
   revalidatePath("/d/configuration/workspaces/all")
   return { success: true, data: { id } }
+}
+
+export async function setActiveWorkspace(
+  workspaceId: string
+): Promise<ActionResult<{ id: string }>> {
+  if (!workspaceId) return failure("Workspace id is required.")
+
+  const context = await getActionContext()
+  if (!context.userId || !context.companyId) {
+    return failure("You must be signed in with a company to switch workspaces.")
+  }
+
+  const supabase = await createClient()
+  const { data: workspace, error } = await supabase
+    .from("workspaces")
+    .select("id")
+    .eq("id", workspaceId)
+    .eq("company_id", context.companyId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[action:setActiveWorkspace]", error)
+    return failure(error.message)
+  }
+  if (!workspace) {
+    return failure("Workspace not found in this company.")
+  }
+
+  const cookieStore = await cookies()
+  cookieStore.set("active_workspace_id", workspaceId, {
+    path: "/",
+    httpOnly: false,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 365,
+  })
+
+  revalidatePath("/", "layout")
+  return { success: true, data: { id: workspaceId } }
 }

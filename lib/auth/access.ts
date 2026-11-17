@@ -1,5 +1,6 @@
 import { cache } from "react"
 
+import { cookies } from "next/headers"
 import { createClient } from "@/utils/supabase/server"
 import type { Company, Workspace, WorkspaceLocation } from "@/types/database"
 
@@ -182,16 +183,24 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
   const workspaceMembers =
     (workspaceMemberResult.data as WorkspaceMembershipRow[] | null) ?? []
 
+  const cookieWorkspaceId = (await cookies()).get("active_workspace_id")?.value ?? null
+
   const companyId =
     companyMember?.company_id ??
     employee?.company_id ??
     workspaceMembers[0]?.company_id ??
     null
+  const embeddedCompany = companyMember?.company ?? null
+  const availableWorkspaceIds = new Set(
+    (embeddedCompany?.workspaces ?? []).map((workspace) => workspace.id)
+  )
   const workspaceId =
-    employee?.workspace_id ??
-    workspaceMembers.find((member) => member.company_id === companyId)
-      ?.workspace_id ??
-    null
+    cookieWorkspaceId && availableWorkspaceIds.has(cookieWorkspaceId)
+      ? cookieWorkspaceId
+      : employee?.workspace_id ??
+        workspaceMembers.find((member) => member.company_id === companyId)
+          ?.workspace_id ??
+        null
 
   const email = employee?.email ?? claims?.email ?? ""
   const metadataName =
@@ -224,7 +233,6 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
   const companyWorkspaceMembers = workspaceMembers.filter(
     (member) => member.company_id === companyId
   )
-  const embeddedCompany = companyMember?.company ?? null
   const embeddedRole = companyMember?.role ?? null
 
   // Company roles and workspace roles both grant permissions. The company role

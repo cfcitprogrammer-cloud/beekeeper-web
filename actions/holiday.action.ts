@@ -39,7 +39,7 @@ export async function createHoliday(
   const authorized = await getAuthorizedContext(PERMISSIONS.ATTENDANCE_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("holidays")
@@ -73,7 +73,7 @@ export async function updateHoliday(
   const authorized = await getAuthorizedContext(PERMISSIONS.ATTENDANCE_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("holidays")
@@ -105,7 +105,7 @@ export async function deleteHoliday(
   const authorized = await getAuthorizedContext(PERMISSIONS.ATTENDANCE_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("holidays")

@@ -31,7 +31,7 @@ export async function updateShift(
   const authorized = await getAuthorizedContext(PERMISSIONS.SHIFTS_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("shifts")
@@ -64,7 +64,7 @@ export async function deleteShift(id: string): Promise<ActionResult<{ id: string
   const authorized = await getAuthorizedContext(PERMISSIONS.SHIFTS_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("shifts")
@@ -93,12 +93,13 @@ export async function createShift(
   const authorized = await getAuthorizedContext(PERMISSIONS.SHIFTS_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("shifts")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       name: input.name.trim(),
       start_time: input.startTime,
       end_time: input.endTime,

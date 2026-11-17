@@ -50,12 +50,13 @@ export async function createInventoryUom(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("inventory_uoms")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       code,
       name,
       description: input.description?.trim() || null,
@@ -87,7 +88,7 @@ export async function updateInventoryUom(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("inventory_uoms")
@@ -118,7 +119,7 @@ export async function deleteInventoryUom(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data: uom, error: readError } = await supabase
     .from("inventory_uoms")

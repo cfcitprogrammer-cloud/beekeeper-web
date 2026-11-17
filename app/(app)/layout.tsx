@@ -25,6 +25,7 @@ export default async function AppLayout({
     <AppShell
       companyName={access.company?.name ?? "Beekeeper"}
       workspaces={access.workspaces}
+      activeWorkspaceId={access.workspaceId ?? access.workspaces[0]?.id ?? ""}
       user={access.user}
       permissions={access.permissions}
       pendingApprovals={approvals.data}

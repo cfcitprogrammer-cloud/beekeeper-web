@@ -35,12 +35,13 @@ export async function createExpenseCategory(
   const authorized = await getAuthorizedContext(PERMISSIONS.EXPENSES_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("expense_categories")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       name: input.name.trim(),
       code: normalizeCode(input.code),
       description: input.description?.trim() || null,
@@ -75,7 +76,7 @@ export async function updateExpenseCategory(
   const authorized = await getAuthorizedContext(PERMISSIONS.EXPENSES_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("expense_categories")
@@ -115,7 +116,7 @@ export async function deleteExpenseCategory(
   const authorized = await getAuthorizedContext(PERMISSIONS.EXPENSES_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("expense_categories")

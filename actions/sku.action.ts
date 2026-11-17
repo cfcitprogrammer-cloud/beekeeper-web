@@ -148,7 +148,7 @@ export async function createSku(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const uomResult = await resolveUom(supabase, companyId, input)
   if (!uomResult.ok) return failure(uomResult.error)
@@ -157,6 +157,7 @@ export async function createSku(
     .from("skus")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       sku_code: input.skuCode.trim().toUpperCase(),
       barcode: input.barcode?.trim() || null,
       name: input.name.trim(),

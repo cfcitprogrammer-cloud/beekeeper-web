@@ -389,6 +389,7 @@ export async function addProductionStage(
     .from("production_stages")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       pipeline_id: input.pipelineId,
       name: input.name.trim(),
       sequence,
@@ -707,6 +708,7 @@ export async function assignStageSkus(
     const { error } = await supabase.from("production_stage_skus").insert(
       toAdd.map((skuId) => ({
         company_id: companyId,
+        workspace_id: workspaceId,
         stage_id: stage.id,
         sku_id: skuId,
         assigned_by: userId,

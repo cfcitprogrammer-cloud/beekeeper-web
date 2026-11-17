@@ -24,12 +24,13 @@ export async function createSkuCategory(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("sku_categories")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       name: input.name.trim(),
       parent_id: input.parentId || null,
     })
@@ -55,7 +56,7 @@ export async function updateSkuCategory(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("sku_categories")
@@ -86,7 +87,7 @@ export async function deleteSkuCategory(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("sku_categories")

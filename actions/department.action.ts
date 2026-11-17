@@ -25,12 +25,13 @@ export async function createDepartment(
   const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("departments")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       name: input.name.trim(),
       code: input.code?.trim() || null,
       parent_id: input.parentId || null,
@@ -56,7 +57,7 @@ export async function updateDepartment(
   const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("departments")
@@ -87,7 +88,7 @@ export async function deleteDepartment(
   const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("departments")

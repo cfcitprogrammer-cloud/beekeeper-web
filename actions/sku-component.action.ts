@@ -32,12 +32,13 @@ export async function addSkuComponent(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("sku_components")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       parent_sku_id: input.parentSkuId,
       component_sku_id: input.componentSkuId,
       quantity: input.quantity,
@@ -68,7 +69,7 @@ export async function updateSkuComponentQuantity(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("sku_components")
@@ -95,7 +96,7 @@ export async function removeSkuComponent(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("sku_components")

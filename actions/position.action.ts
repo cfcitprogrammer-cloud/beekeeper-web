@@ -26,12 +26,13 @@ export async function createPosition(
   const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_CREATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("positions")
     .insert({
       company_id: companyId,
+      workspace_id: workspaceId,
       title: input.title.trim(),
       description: input.description?.trim() || null,
       min_salary: input.minSalary ?? null,
@@ -58,7 +59,7 @@ export async function updatePosition(
   const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { data, error } = await supabase
     .from("positions")
@@ -90,7 +91,7 @@ export async function deletePosition(
   const authorized = await getAuthorizedContext(PERMISSIONS.EMPLOYEES_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const { error } = await supabase
     .from("positions")

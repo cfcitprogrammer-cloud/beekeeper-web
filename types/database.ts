@@ -211,6 +211,7 @@ export interface WorkspaceLocation {
 export interface Department {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   name: string
   code: string | null
   parent_id: UUID | null
@@ -221,6 +222,7 @@ export interface Department {
 export interface Position {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   title: string
   description: string | null
   min_salary: number | null
@@ -285,6 +287,7 @@ export interface EmployeeDocument {
 export interface Shift {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   name: string
   start_time: string
   end_time: string
@@ -363,6 +366,7 @@ export interface AttendanceDaily {
 export interface LeaveType {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   name: string
   code: string
   is_paid: boolean
@@ -448,6 +452,7 @@ export interface Outlet {
 export interface SkuCategory {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   name: string
   parent_id: UUID | null
   created_at: ISODateTime
@@ -456,6 +461,7 @@ export interface SkuCategory {
 export interface InventoryUom {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   code: string
   name: string
   description: string | null
@@ -467,6 +473,7 @@ export interface InventoryUom {
 export interface Sku {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   sku_code: string
   barcode: string | null
   name: string
@@ -557,6 +564,7 @@ export interface Expense {
 export interface ExpenseCategory {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   name: string
   code: string
   description: string | null
@@ -593,6 +601,7 @@ export interface ProductionPipeline {
 export interface ProductionStage {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   pipeline_id: UUID
   name: string
   sequence: number
@@ -607,6 +616,7 @@ export interface ProductionStage {
 export interface ProductionStageSku {
   id: UUID
   company_id: UUID
+  workspace_id: UUID | null
   stage_id: UUID
   sku_id: UUID
   assigned_by: UUID | null

@@ -123,6 +123,7 @@ export type WorkspaceMember = {
 export type Department = {
   id: string
   company_id: string
+  workspace_id: string | null
   name: string
   code: string | null
   parent_id: string | null
@@ -133,6 +134,7 @@ export type Department = {
 export type Position = {
   id: string
   company_id: string
+  workspace_id: string | null
   title: string
   description: string | null
   min_salary: number | null
@@ -196,6 +198,7 @@ export type EmployeeDocument = {
 export type Shift = {
   id: string
   company_id: string
+  workspace_id: string | null
   name: string
   start_time: string
   end_time: string
@@ -280,6 +283,7 @@ export type AttendanceDaily = {
 export type LeaveType = {
   id: string
   company_id: string
+  workspace_id: string | null
   name: string
   code: string
   is_paid: boolean
@@ -360,6 +364,7 @@ export type Outlet = {
 export type SkuCategory = {
   id: string
   company_id: string
+  workspace_id: string | null
   name: string
   parent_id: string | null
   created_at: string
@@ -368,6 +373,7 @@ export type SkuCategory = {
 export type InventoryUom = {
   id: string
   company_id: string
+  workspace_id: string | null
   code: string
   name: string
   description: string | null
@@ -379,6 +385,7 @@ export type InventoryUom = {
 export type Sku = {
   id: string
   company_id: string
+  workspace_id: string | null
   sku_code: string
   barcode: string | null
   name: string
@@ -398,6 +405,7 @@ export type Sku = {
 export type SkuComponent = {
   id: string
   company_id: string
+  workspace_id: string | null
   parent_sku_id: string
   component_sku_id: string
   quantity: number
@@ -621,6 +629,7 @@ export type ExpensePlan = {
 export type ExpenseCategory = {
   id: string
   company_id: string
+  workspace_id: string | null
   name: string
   code: string
   description: string | null
@@ -681,6 +690,7 @@ export type ProductionPipeline = {
 export type ProductionStage = {
   id: string
   company_id: string
+  workspace_id: string | null
   pipeline_id: string
   name: string
   sequence: number
@@ -710,6 +720,7 @@ export type ProductionRun = {
 export type ProductionStageSku = {
   id: string
   company_id: string
+  workspace_id: string | null
   stage_id: string
   sku_id: string
   assigned_by: string | null
@@ -746,6 +757,7 @@ export type ProductionUsage = {
 export type ProductionUsageSettings = {
   id: string
   company_id: string
+  workspace_id: string | null
   cutoff_days: number
   cutoff_time: string
   allow_submitter_edit: boolean

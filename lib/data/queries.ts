@@ -604,10 +604,10 @@ export async function getEmployeeDocuments(
 
 export async function getDepartments(): Promise<QueryResult<Department[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("departments")
-    .select("*")
-    .order("name")
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase.from("departments").select("*").order("name")
+  const { data, error } = await (workspaceId ? query.eq("workspace_id", workspaceId) : query)
 
   logError("departments", error)
   return empty((data as Department[] | null) ?? [])
@@ -641,10 +641,10 @@ export async function getRoles(): Promise<QueryResult<{ id: string; name: string
 
 export async function getPositions(): Promise<QueryResult<Position[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("positions")
-    .select("*")
-    .order("title")
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase.from("positions").select("*").order("title")
+  const { data, error } = await (workspaceId ? query.eq("workspace_id", workspaceId) : query)
 
   logError("positions", error)
   return empty((data as Position[] | null) ?? [])
@@ -670,10 +670,10 @@ export async function getPosition(
 
 export async function getShifts(): Promise<QueryResult<Shift[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("shifts")
-    .select("*")
-    .order("start_time")
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase.from("shifts").select("*").order("start_time")
+  const { data, error } = await (workspaceId ? query.eq("workspace_id", workspaceId) : query)
 
   logError("shifts", error)
   return empty((data as Shift[] | null) ?? [])
@@ -693,10 +693,15 @@ export async function getShift(id: string): Promise<QueryResult<Shift | null>> {
 
 export async function getEmployeeSchedules(): Promise<QueryResult<EmployeeSchedule[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase
     .from("employee_schedules")
     .select("*")
     .order("effective_from", { ascending: false })
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
 
   logError("employee-schedules", error)
   return empty((data as EmployeeSchedule[] | null) ?? [])
@@ -740,12 +745,17 @@ export async function getAttendance(): Promise<
   QueryResult<AttendanceWithEmployee[]>
 > {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase
     .from("attendances")
     .select(
       "*, employee:employees(id,employee_no,first_name,last_name,avatar_path), location:workspace_locations(id,name,radius_m)"
     )
     .order("captured_at", { ascending: true })
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
 
   logError("attendance", error)
   if (error || !data) return empty([])
@@ -818,12 +828,20 @@ export async function getAttendanceDaily(): Promise<
   QueryResult<AttendanceDaily[]>
 > {
   const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
 
   const [dailyResult, employeeResult, departmentResult] = await Promise.all([
-    supabase
-      .from("attendance_daily")
-      .select("*")
-      .order("work_date", { ascending: false }),
+    (workspaceId
+      ? supabase
+          .from("attendance_daily")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("work_date", { ascending: false })
+      : supabase
+          .from("attendance_daily")
+          .select("*")
+          .order("work_date", { ascending: false })),
     supabase
       .from("employees")
       .select("id, employee_no, first_name, last_name, department_id"),
@@ -888,6 +906,7 @@ export async function getAttendanceDaily(): Promise<
 type LeaveTypeRow = {
   id: string
   company_id: string
+  workspace_id: string | null
   name: string
   code: string
   is_paid: boolean
@@ -907,10 +926,10 @@ function mapLeaveType(row: LeaveTypeRow): LeaveType {
 
 export async function getLeaveTypes(): Promise<QueryResult<LeaveType[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("leave_types")
-    .select("*")
-    .order("name")
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase.from("leave_types").select("*").order("name")
+  const { data, error } = await (workspaceId ? query.eq("workspace_id", workspaceId) : query)
 
   logError("leave-types", error)
   return empty(((data as LeaveTypeRow[] | null) ?? []).map(mapLeaveType))
@@ -1002,12 +1021,17 @@ export async function getLeaveRequests(): Promise<
   QueryResult<LeaveRequestWithRelations[]>
 > {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase
     .from("leave_requests")
     .select(
       "*, employee:employees(id,employee_no,first_name,last_name,avatar_path,department_id,department:departments(name)), leave_type:leave_types(*)"
     )
     .order("created_at", { ascending: false })
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
 
   logError("leave-requests", error)
   if (error || !data) return empty([])
@@ -1160,10 +1184,12 @@ export async function getOutlets(): Promise<
   QueryResult<OutletWithRelations[]>
 > {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("outlets")
-    .select("*")
-    .order("name")
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase.from("outlets").select("*").order("name")
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
 
   logError("outlets", error)
   if (error || !data) return empty([])
@@ -1200,10 +1226,10 @@ export async function getOutlet(
 
 export async function getInventoryUoms(): Promise<QueryResult<InventoryUom[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("inventory_uoms")
-    .select("*")
-    .order("name")
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase.from("inventory_uoms").select("*").order("name")
+  const { data, error } = await (workspaceId ? query.eq("workspace_id", workspaceId) : query)
 
   logError("inventory-uoms", error)
   return empty((data as InventoryUom[] | null) ?? [])
@@ -1225,10 +1251,10 @@ export async function getInventoryUom(
 
 export async function getSkuCategories(): Promise<QueryResult<SkuCategory[]>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("sku_categories")
-    .select("*")
-    .order("name")
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase.from("sku_categories").select("*").order("name")
+  const { data, error } = await (workspaceId ? query.eq("workspace_id", workspaceId) : query)
 
   logError("sku-categories", error)
   return empty((data as SkuCategory[] | null) ?? [])
@@ -1250,11 +1276,17 @@ export async function getSkuCategory(
 
 export async function getSkus(): Promise<QueryResult<SkuWithCategory[]>> {
   const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  const skusQuery = supabase
+    .from("skus")
+    .select("*, category:sku_categories(id,name)")
+    .order("name")
   const [skusResult, componentsResult] = await Promise.all([
-    supabase
-      .from("skus")
-      .select("*, category:sku_categories(id,name)")
-      .order("name"),
+    workspaceId
+      ? skusQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+      : skusQuery,
     supabase.from("sku_components").select("parent_sku_id"),
   ])
 
@@ -1339,12 +1371,17 @@ export async function getBookings(): Promise<
   QueryResult<BookingWithRelations[]>
 > {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+  const query = supabase
     .from("bookings")
     .select(
       "*, outlet:outlets(id,code,name,address), employee:employees(id,first_name,last_name,employee_no)"
     )
     .order("booking_date", { ascending: false })
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
 
   logError("bookings", error)
   if (error || !data) return empty([])
@@ -1564,9 +1601,17 @@ export async function getApprovalTemplates(): Promise<
   QueryResult<ApprovalTemplateWithConfig[]>
 > {
   const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
   const [templatesResult, stagesResult, conditionsResult, approversResult, originatorsResult] =
     await Promise.all([
-      supabase.from("approval_templates").select("*").order("name"),
+      (workspaceId
+        ? supabase
+            .from("approval_templates")
+            .select("*")
+            .eq("workspace_id", workspaceId)
+            .order("name")
+        : supabase.from("approval_templates").select("*").order("name")),
       supabase
         .from("approval_template_stages")
         .select("*, stage:approval_stages(*)")

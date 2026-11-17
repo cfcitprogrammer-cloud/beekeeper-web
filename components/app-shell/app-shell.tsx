@@ -2,6 +2,7 @@
 
 import * as React from "react"
 
+import { setActiveWorkspace } from "@/actions/workspace.action"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import type { MyPendingApproval, Workspace } from "@/types/database"
 
@@ -11,6 +12,7 @@ import { Topbar } from "./topbar"
 export function AppShell({
   companyName,
   workspaces,
+  activeWorkspaceId: initialActiveWorkspaceId,
   user,
   permissions,
   pendingApprovals,
@@ -18,6 +20,7 @@ export function AppShell({
 }: {
   companyName: string
   workspaces: Workspace[]
+  activeWorkspaceId?: string
   user: {
     name: string
     email: string
@@ -30,12 +33,24 @@ export function AppShell({
   children: React.ReactNode
 }) {
   const [activeWorkspaceId, setActiveWorkspaceId] = React.useState(
-    workspaces[0]?.id ?? ""
+    initialActiveWorkspaceId || workspaces[0]?.id || ""
   )
 
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ??
     workspaces[0]
+
+  async function handleWorkspaceChange(workspaceId: string) {
+    setActiveWorkspaceId(workspaceId)
+    const result = await setActiveWorkspace(workspaceId)
+    if (!result.success) {
+      // revert on failure
+      setActiveWorkspaceId(activeWorkspace?.id ?? workspaces[0]?.id ?? "")
+      return
+    }
+
+    window.location.reload()
+  }
 
   return (
     <SidebarProvider>
@@ -43,7 +58,7 @@ export function AppShell({
         companyName={companyName}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
-        onWorkspaceChange={setActiveWorkspaceId}
+        onWorkspaceChange={handleWorkspaceChange}
         user={user}
         permissions={permissions}
         pendingCount={pendingApprovals.length}
