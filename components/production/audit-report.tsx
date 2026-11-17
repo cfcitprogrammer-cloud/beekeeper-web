@@ -132,6 +132,7 @@ export function ProductionAuditReport({
   const filtered = React.useMemo(() => {
     return usage
       .filter((line) => {
+        if (line.status === "cancelled") return false
         const usageDate = line.usage_date.slice(0, 10)
         return (
           (!pipelineId || line.pipeline_id === pipelineId) &&

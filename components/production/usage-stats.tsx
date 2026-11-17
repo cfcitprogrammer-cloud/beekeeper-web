@@ -10,12 +10,18 @@ export function ProductionUsageStats({
 }: {
   usage: ProductionUsageWithRelations[]
 }) {
-  const batches = groupProductionUsage(usage)
+  // Cancellations are kept visible in the usage tables, but they no longer
+  // count towards production metrics.
+  const activeUsage = usage.filter((line) => line.status !== "cancelled")
+  const cancelledCount = usage.length - activeUsage.length
+  const batches = groupProductionUsage(activeUsage)
   const skuIds = new Set(
-    usage.map((line) => line.sku_id).filter((id): id is string => Boolean(id))
+    activeUsage
+      .map((line) => line.sku_id)
+      .filter((id): id is string => Boolean(id))
   )
-  const stageIds = new Set(usage.map((line) => line.stage_id))
-  const latestDate = usage.reduce<string | null>(
+  const stageIds = new Set(activeUsage.map((line) => line.stage_id))
+  const latestDate = activeUsage.reduce<string | null>(
     (latest, line) =>
       !latest || line.usage_date > latest ? line.usage_date : latest,
     null
@@ -26,7 +32,13 @@ export function ProductionUsageStats({
       <MetricCard
         label="Submissions"
         value={batches.length}
-        hint={`${usage.length} SKU line${usage.length === 1 ? "" : "s"}`}
+        hint={`${activeUsage.length} active SKU line${
+          activeUsage.length === 1 ? "" : "s"
+        }${
+          cancelledCount > 0
+            ? ` · ${cancelledCount} cancellation${cancelledCount === 1 ? "" : "s"}`
+            : ""
+        }`}
         icon={FlaskConical}
         accent="primary"
       />

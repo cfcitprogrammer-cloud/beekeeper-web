@@ -33,6 +33,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import {
+  hasAnyPermission,
   hasPermission,
   PERMISSIONS,
   type PermissionKey,
@@ -62,6 +63,7 @@ type NavChild = {
   href: string
   badge?: number
   permission?: PermissionKey
+  anyPermission?: PermissionKey[]
 }
 
 type NavItem = {
@@ -69,6 +71,7 @@ type NavItem = {
   href: string
   icon: React.ElementType
   permission?: PermissionKey
+  anyPermission?: PermissionKey[]
   superAdminOnly?: boolean
   children?: NavChild[]
 }
@@ -283,7 +286,10 @@ export const navSections: NavSection[] = [
         title: "Production",
         href: "/production",
         icon: Factory,
-        permission: PERMISSIONS.PRODUCTION_VIEW,
+        anyPermission: [
+          PERMISSIONS.PRODUCTION_VIEW,
+          PERMISSIONS.PRODUCTION_EDITOR,
+        ],
         children: [
           {
             title: "Overview",
@@ -309,6 +315,16 @@ export const navSections: NavSection[] = [
             title: "All usage",
             href: "/production/usage",
             permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
+          {
+            title: "Usage editor",
+            href: "/production/usage-editor",
+            permission: PERMISSIONS.PRODUCTION_EDITOR,
+          },
+          {
+            title: "Usage settings",
+            href: "/production/usage-settings",
+            permission: PERMISSIONS.PRODUCTION_EDITOR,
           },
           {
             title: "Audit report",
@@ -531,14 +547,18 @@ export function AppSidebar({
               (item) =>
                 (!item.permission ||
                   hasPermission(permissions, item.permission)) &&
+                (!item.anyPermission ||
+                  hasAnyPermission(permissions, item.anyPermission)) &&
                 (!item.superAdminOnly || user.role === "Super Admin")
             )
             .map((item) => ({
               ...item,
               children: item.children?.filter(
                 (child) =>
-                  !child.permission ||
-                  hasPermission(permissions, child.permission)
+                  (!child.permission ||
+                    hasPermission(permissions, child.permission)) &&
+                  (!child.anyPermission ||
+                    hasAnyPermission(permissions, child.anyPermission))
               ),
             }))
             .filter((item) => !item.children || item.children.length > 0),

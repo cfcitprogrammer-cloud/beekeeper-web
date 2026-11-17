@@ -12,6 +12,7 @@ import type {
   ProductionStage,
   ProductionStageSku,
   ProductionUsage,
+  ProductionUsageSettings,
   Sku,
   Visit,
   VisitPlan,
@@ -462,6 +463,21 @@ export async function getProductionUsage(
           : null,
     }))
   )
+}
+
+export async function getProductionUsageSettings(): Promise<
+  QueryResult<ProductionUsageSettings | null>
+> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("production_usage_settings")
+    .select("*")
+    .limit(1)
+    .maybeSingle()
+
+  logError("production-usage-settings", error)
+  if (error || !data) return empty(null)
+  return empty(data as ProductionUsageSettings)
 }
 
 export async function getProductionPipeline(

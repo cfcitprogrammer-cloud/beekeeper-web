@@ -61,12 +61,20 @@ export function UsageForm({
     () => selectedStage?.skus ?? [],
     [selectedStage]
   )
+  // Only BOM SKUs (SKUs with components) may be added as top-level entries;
+  // their component lines are auto-added. Component SKUs themselves are never
+  // picked manually as a parent line.
+  const bomStageSkus = React.useMemo(
+    () => stageSkus.filter((sku) => (sku.components?.length ?? 0) > 0),
+    [stageSkus]
+  )
   const selectedSkuIds = React.useMemo(
     () => new Set(lines.map((line) => line.skuId).filter(Boolean)),
     [lines]
   )
-  const allSkusSelected =
-    stageSkus.length > 0 && stageSkus.every((sku) => selectedSkuIds.has(sku.id))
+  const allBomSkusSelected =
+    bomStageSkus.length > 0 &&
+    bomStageSkus.every((sku) => selectedSkuIds.has(sku.id))
 
   // Bill of materials relationships within this entry: which lines are parents
   // and which are auto-added components of a parent.
@@ -168,11 +176,37 @@ export function UsageForm({
   }
 
   function removeLine(key: string) {
-    setLines((current) =>
-      current.length === 1
-        ? current
-        : current.filter((line) => line.key !== key)
-    )
+    setLines((current) => {
+      if (current.length === 1) return current
+
+      const target = current.find((line) => line.key === key)
+      const targetSku = stageSkus.find((sku) => sku.id === target?.skuId)
+      const removedCompIds = new Set(
+        (targetSku?.components ?? []).map((comp) => comp.componentSkuId)
+      )
+
+      // Drop the selected line first.
+      const remaining = current.filter((line) => line.key !== key)
+
+      // If the removed line was a BOM parent, also drop its component lines,
+      // unless another still-selected parent still needs that component.
+      if (removedCompIds.size > 0) {
+        const stillNeeded = new Set<string>()
+        for (const line of remaining) {
+          const sku = stageSkus.find((item) => item.id === line.skuId)
+          for (const comp of sku?.components ?? []) {
+            stillNeeded.add(comp.componentSkuId)
+          }
+        }
+        const filtered = remaining.filter((line) => {
+          if (!removedCompIds.has(line.skuId)) return true
+          return stillNeeded.has(line.skuId)
+        })
+        return filtered.length > 0 ? filtered : [nextLine()]
+      }
+
+      return remaining.length > 0 ? remaining : [nextLine()]
+    })
   }
 
   async function save() {
@@ -389,11 +423,32 @@ export function UsageForm({
                       </span>
                     ) : null}
                     <SkuCombobox
-                      skus={stageSkus}
+                      skus={
+                        opts.component
+                          ? stageSkus
+                          : (() => {
+                              const base =
+                                bomStageSkus.length > 0 ? bomStageSkus : stageSkus
+                              if (
+                                line.skuId &&
+                                !base.some((sku) => sku.id === line.skuId)
+                              ) {
+                                const selected = stageSkus.find(
+                                  (sku) => sku.id === line.skuId
+                                )
+                                if (selected) return [selected, ...base]
+                              }
+                              return base
+                            })()
+                      }
                       value={line.skuId}
                       onChange={(skuId) => chooseSku(line.key, skuId)}
                       usedIds={selectedSkuIds}
-                      disabled={!selectedStage || stageSkus.length === 0}
+                      disabled={
+                        opts.component ||
+                        !selectedStage ||
+                        stageSkus.length === 0
+                      }
                       placeholder={
                         !selectedStage
                           ? "Select a stage first"
@@ -428,7 +483,7 @@ export function UsageForm({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => removeLine(line.key)}
-                    disabled={lines.length === 1}
+                    disabled={lines.length === 1 || opts.component}
                     aria-label={`Remove SKU line`}
                   >
                     <Trash2 className="size-3.5 text-destructive" />
@@ -441,10 +496,61 @@ export function UsageForm({
               <div key={group.parent.key} className="space-y-1.5">
                 {renderLine(group.parent, { component: false, parentSku: null })}
                 {group.children.length > 0 ? (
-                  <div className="ml-3 space-y-1.5 border-l-2 border-primary/20 pl-3">
-                    {group.children.map((child) =>
-                      renderLine(child, { component: true, parentSku: parentSku })
-                    )}
+                  <div className="ml-3 overflow-hidden rounded-md border border-primary/20 bg-primary/[0.02]">
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b bg-muted/40 text-[0.625rem] font-medium text-muted-foreground">
+                          <th className="px-2 py-1.5 text-left">Component SKU</th>
+                          <th className="px-2 py-1.5 text-right">Quantity</th>
+                          <th className="px-2 py-1.5 text-left">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.children.map((child) => {
+                          const childSku =
+                            stageSkus.find((sku) => sku.id === child.skuId) ??
+                            null
+                          return (
+                            <tr
+                              key={child.key}
+                              className="border-b last:border-b-0"
+                            >
+                              <td className="px-2 py-1.5">
+                                <SkuCombobox
+                                  skus={stageSkus}
+                                  value={child.skuId}
+                                  onChange={(skuId) =>
+                                    chooseSku(child.key, skuId)
+                                  }
+                                  usedIds={selectedSkuIds}
+                                  disabled
+                                  placeholder="Component SKU"
+                                  ariaLabel="Component SKU line"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={child.quantity}
+                                  onChange={(event) =>
+                                    setQuantity(child.key, event.target.value)
+                                  }
+                                  disabled={!childSku}
+                                  placeholder="Quantity"
+                                  aria-label="Quantity for component SKU"
+                                  className="h-8 text-right"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5 text-muted-foreground">
+                                {childSku?.uom ?? "—"}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 ) : null}
               </div>
@@ -464,7 +570,7 @@ export function UsageForm({
             </p>
           ) : null}
 
-          {allSkusSelected && stageSkus.length > 1 ? (
+          {allBomSkusSelected && bomStageSkus.length > 1 ? (
             <p className="text-[0.625rem] text-muted-foreground">
               All {stageSkus.length} SKUs assigned to this stage are already on
               this entry.
@@ -476,11 +582,11 @@ export function UsageForm({
             size="sm"
             onClick={addLine}
             disabled={
-              !selectedStage || stageSkus.length === 0 || allSkusSelected
+              !selectedStage || bomStageSkus.length === 0 || allBomSkusSelected
             }
           >
             <Plus />
-            Add another SKU
+            Add another BOM SKU
           </Button>
         </div>
 

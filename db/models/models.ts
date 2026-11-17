@@ -716,6 +716,8 @@ export type ProductionStageSku = {
   created_at: string
 }
 
+export type ProductionUsageStatus = "submitted" | "completed" | "cancelled"
+
 export type ProductionUsage = {
   id: string
   company_id: string
@@ -732,12 +734,39 @@ export type ProductionUsage = {
   waste_quantity: number
   uom: string | null
   notes: string | null
+  status: ProductionUsageStatus
   submitted_by: string | null
   recorded_by: string | null
   usage_date: string
   recorded_at: string
   created_at: string
   updated_at: string
+}
+
+export type ProductionUsageSettings = {
+  id: string
+  company_id: string
+  cutoff_days: number
+  cutoff_time: string
+  allow_submitter_edit: boolean
+  allow_duplicates: boolean
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProductionUsageChangelog = {
+  id: string
+  company_id: string
+  workspace_id: string | null
+  usage_id: string
+  batch_id: string | null
+  action: string
+  changed_by: string | null
+  changed_at: string
+  previous_values: Record<string, unknown> | null
+  new_values: Record<string, unknown> | null
+  reason: string | null
 }
 
 // ---------------------------------------------------------------------------

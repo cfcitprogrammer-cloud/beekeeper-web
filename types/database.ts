@@ -628,6 +628,8 @@ export interface ProductionRun {
   updated_at: ISODateTime
 }
 
+export type ProductionUsageStatus = "submitted" | "completed" | "cancelled"
+
 export interface ProductionUsage {
   id: UUID
   company_id: UUID
@@ -644,6 +646,7 @@ export interface ProductionUsage {
   waste_quantity: number
   uom: string | null
   notes: string | null
+  status: ProductionUsageStatus
   submitted_by: UUID | null
   recorded_by: UUID | null
   usage_date: ISODateTime
@@ -964,6 +967,8 @@ export type Database = {
       production_stage_skus: TableDefinition<Db.ProductionStageSku>
       production_runs: TableDefinition<Db.ProductionRun>
       production_usage: TableDefinition<Db.ProductionUsage>
+      production_usage_settings: TableDefinition<Db.ProductionUsageSettings>
+      production_usage_changelog: TableDefinition<Db.ProductionUsageChangelog>
       visit_plans: TableDefinition<Db.VisitPlan>
       visit_plan_outlets: TableDefinition<Db.VisitPlanOutlet>
       visits: TableDefinition<Db.Visit>
