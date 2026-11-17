@@ -581,7 +581,7 @@ export function AppSidebar({
                   Beekeeper
                 </span>
                 <span className="truncate font-mono text-[0.5rem] tracking-[0.18em] text-muted-foreground uppercase">
-                  Hive · ERP · Field ops
+                  ERP · Field ops
                 </span>
               </div>
             </SidebarMenuButton>
@@ -614,12 +614,12 @@ export function AppSidebar({
           </SidebarGroup>
         ))}
 
-        <div className="mt-auto border-t border-sidebar-border px-4 pt-3 pb-2 group-data-[collapsible=icon]:hidden">
+        {/* <div className="mt-auto border-t border-sidebar-border px-4 pt-3 pb-2 group-data-[collapsible=icon]:hidden">
           <AsciiBee className="text-[0.5rem] text-sidebar-primary/40" />
           <p className="mt-1.5 font-mono text-[0.5rem] tracking-[0.2em] text-sidebar-foreground/30 uppercase">
             apiary // hive 01
           </p>
-        </div>
+        </div> */}
       </SidebarContent>
 
       <SidebarFooter>

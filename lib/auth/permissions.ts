@@ -208,6 +208,7 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: PermissionKey }[] = [
   { prefix: "/approvals", permission: PERMISSIONS.APPROVALS_VIEW },
   { prefix: "/roles", permission: PERMISSIONS.ROLES_MANAGE },
   { prefix: "/dashboard", permission: PERMISSIONS.DASHBOARD_VIEW },
+  { prefix: "/account", permission: PERMISSIONS.DASHBOARD_VIEW },
 ]
 
 export function permissionForPath(pathname: string): PermissionKey | null {

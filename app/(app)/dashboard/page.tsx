@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react"
 
+import { DashboardCharts } from "@/components/dashboard/dashboard-charts"
 import { MetricCard } from "@/components/shared/metric-card"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -465,6 +466,21 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="border-b pb-3">
+          <CardTitle>Distribution</CardTitle>
+          <CardDescription>
+            Booking pipeline and outlet coverage at a glance.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <DashboardCharts
+            bookingCounts={bookingCounts}
+            outletCounts={outletCounts}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="border-b pb-3">

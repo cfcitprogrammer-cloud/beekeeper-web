@@ -39,7 +39,7 @@ export function LoginForm({ next }: { next: string }) {
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="email">Work email</Label>
+        <Label htmlFor="email">Email</Label>
         <div className="relative">
           <Mail className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -59,9 +59,9 @@ export function LoginForm({ next }: { next: string }) {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <Label htmlFor="password">Password</Label>
-          <span className="text-[0.625rem] text-muted-foreground">
+          {/* <span className="text-[0.625rem] text-muted-foreground">
             Contact your administrator for a reset
-          </span>
+          </span> */}
         </div>
         <div className="relative">
           <LockKeyhole className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -95,10 +95,9 @@ export function LoginForm({ next }: { next: string }) {
         {!pending && <ArrowRight className="ml-auto" />}
       </Button>
 
-      <p className="text-center text-[0.625rem] text-muted-foreground">
-        Access is granted through your company role. Ask an administrator if you
-        need an account.
-      </p>
+      {/* <p className="text-center text-[0.625rem] text-muted-foreground">
+        Ask an administrator if you need an account.
+      </p> */}
     </form>
   )
 }

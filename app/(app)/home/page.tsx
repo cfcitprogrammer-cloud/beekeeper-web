@@ -290,9 +290,9 @@ export default async function HomePage() {
             <h1 className="font-heading text-4xl leading-[0.95] tracking-tight text-balance sm:text-5xl">
               Welcome back, {firstName}.
             </h1>
-            <p className="font-heading text-base text-primary">
+            {/* <p className="font-heading text-base text-primary">
               蜂と蜜のために
-            </p>
+            </p> */}
             <p className="max-w-xl text-xs/relaxed text-muted-foreground">
               This is your home base. Jump into any module your role can access,
               or review what is still pending on your account.
@@ -346,9 +346,9 @@ export default async function HomePage() {
           <p>
             You are signed in as{" "}
             <span className="font-medium text-foreground">{user.email}</span>,
-            but your account is not linked to a company. A company
-            administrator needs to add you to a company and assign a role before
-            modules become available.
+            but your account is not linked to a company. A company administrator
+            needs to add you to a company and assign a role before modules
+            become available.
           </p>
           <p className="mt-1.5">
             Once your membership is configured, refresh this page. In the
@@ -370,9 +370,9 @@ export default async function HomePage() {
               {access.company?.name ?? "your company"}
             </span>
             , but the{" "}
-            <span className="font-medium text-foreground">{user.role}</span> role
-            does not have any module permissions. Ask an administrator to grant
-            the permissions you need.
+            <span className="font-medium text-foreground">{user.role}</span>{" "}
+            role does not have any module permissions. Ask an administrator to
+            grant the permissions you need.
           </p>
           <p className="mt-1.5">
             This page is always available, even without permissions, so you can
@@ -459,11 +459,7 @@ export default async function HomePage() {
           <div className="border border-border bg-card p-5 lg:col-span-2">
             <p className="micro-label text-primary">Identity // hive record</p>
             <div className="mt-3">
-              <SpecRow
-                label="Signed in"
-                value={user.name}
-                hint={user.email}
-              />
+              <SpecRow label="Signed in" value={user.name} hint={user.email} />
               <SpecRow
                 label="Role"
                 value={user.role}
@@ -523,8 +519,8 @@ export default async function HomePage() {
             <p className="mt-2 font-heading text-2xl">Need more access?</p>
             <p className="mt-2 text-xs/relaxed text-muted-foreground">
               Ask an administrator to review your role in the workspace. Role
-              permissions decide which modules and actions appear in the
-              sidebar and on this page.
+              permissions decide which modules and actions appear in the sidebar
+              and on this page.
             </p>
             <p className="mt-3 border border-border bg-muted/30 px-2.5 py-2 text-[0.6875rem] text-muted-foreground">
               Include your email address when contacting them so they can find

@@ -68,12 +68,12 @@ export default async function LoginPage({
             <div className="leading-tight">
               <p className="font-heading text-base">Beekeeper</p>
               <p className="font-mono text-[0.5rem] tracking-[0.18em] text-muted-foreground uppercase">
-                Hive · ERP · Field ops
+                ERP · Field ops
               </p>
             </div>
           </div>
           <p className="micro-label text-right">
-            Est. apiary
+            v.0.1.0-alpha.1
             <br />
             2026 // 01
           </p>
@@ -85,13 +85,11 @@ export default async function LoginPage({
             00 // The hive
           </p>
           <h1 className="font-heading text-5xl leading-[0.92] tracking-tight text-balance">
-            For the sake of honey and order.
+            All-in-One Operations Management System
           </h1>
-          <p className="font-heading text-lg text-primary">蜂と蜜のために</p>
           <p className="max-w-md text-sm/relaxed text-muted-foreground">
-            Sign in to run the day across people, outlets and approvals. Every
-            write is recorded against your account, so the hive stays
-            auditable.
+            Streamline your operations, manage your workforce, and monitor
+            business activities — all in one platform.
           </p>
 
           <div className="flex items-end justify-between gap-6 border-y border-border py-4">
@@ -129,7 +127,7 @@ export default async function LoginPage({
 
         <p className="micro-label relative flex items-center gap-2">
           <Fingerprint className="size-3" />
-          Sessions secured by Supabase
+          Sessions secured
         </p>
       </section>
 
@@ -157,7 +155,7 @@ export default async function LoginPage({
               Welcome back.
             </h2>
             <p className="text-xs text-muted-foreground">
-              Sign in with your company account to continue.
+              Sign in to continue.
             </p>
           </div>
 
@@ -167,13 +165,13 @@ export default async function LoginPage({
             <p className="micro-label text-primary">First time here?</p>
             <p className="mt-1.5 text-[0.6875rem]/relaxed text-muted-foreground">
               Your account needs a company membership and role before the
-              workspace unlocks. Contact your Beekeeper administrator.
+              workspace unlocks. Contact your administrator.
             </p>
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
             <span className="font-mono text-[0.5rem] tracking-[0.18em] text-muted-foreground/60 uppercase">
-              Beekeeper // hive ops
+              Beekeeper // v.0.1.0-alpha.1
             </span>
             <AsciiBee className="text-[0.4rem] text-primary/60" />
           </div>

@@ -305,9 +305,9 @@ export function Topbar({
                   My approvals
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem className="gap-2">
+              <DropdownMenuItem className="gap-2" render={<Link href="/account" />}>
                 <Settings2 className="size-3.5" />
-                Preferences
+                Account settings
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

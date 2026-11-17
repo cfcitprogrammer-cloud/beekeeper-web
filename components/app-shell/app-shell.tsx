@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import type { MyPendingApproval, Workspace } from "@/types/database"
 
 import { AppSidebar } from "./app-sidebar"
+import { NavigationLoader } from "./navigation-loader"
 import { Topbar } from "./topbar"
 
 export function AppShell({
@@ -53,7 +54,9 @@ export function AppShell({
   }
 
   return (
-    <SidebarProvider>
+    <>
+      <NavigationLoader />
+      <SidebarProvider>
       <AppSidebar
         companyName={companyName}
         workspaces={workspaces}
@@ -74,5 +77,6 @@ export function AppShell({
         <div className="flex-1 p-3 sm:p-4 lg:p-5">{children}</div>
       </SidebarInset>
     </SidebarProvider>
+    </>
   )
 }
