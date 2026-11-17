@@ -4,7 +4,7 @@ import { ProductionUsageStats } from "@/components/production/usage-stats"
 import { UsageManager } from "@/components/production/usage-manager"
 import { PageHeader } from "@/components/shared/page-header"
 import { requirePermission } from "@/lib/auth/guards"
-import { hasAnyPermission, PERMISSIONS } from "@/lib/auth/permissions"
+import { hasAnyPermission, hasPermission, PERMISSIONS } from "@/lib/auth/permissions"
 import {
   getProductionUsage,
   getProductionUsageSettings,
@@ -21,6 +21,10 @@ export default async function ProductionUsagePage() {
     PERMISSIONS.PRODUCTION_CREATE,
     PERMISSIONS.PRODUCTION_UPDATE,
   ])
+  const canManage = hasPermission(
+    access.permissions,
+    PERMISSIONS.PRODUCTION_EDITOR
+  )
 
   return (
     <div className="space-y-5">
@@ -34,6 +38,7 @@ export default async function ProductionUsagePage() {
       <UsageManager
         usage={usageResult.data}
         canRecord={canRecord}
+        canManage={canManage}
         settings={toUsageSettings(settingsResult.data)}
         currentUserId={access.user?.id ?? null}
         now={new Date().toISOString()}

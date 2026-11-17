@@ -3,9 +3,22 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Ban, FlaskConical, Loader2, Pencil, Plus, Save } from "lucide-react"
+import {
+  Ban,
+  Eye,
+  FlaskConical,
+  Loader2,
+  Pencil,
+  Plus,
+  Save,
+  Undo2,
+} from "lucide-react"
 
-import { updateOwnProductionUsage } from "@/actions/production.action"
+import {
+  setProductionUsageStatus,
+  updateOwnProductionUsage,
+  updateProductionUsageLines,
+} from "@/actions/production.action"
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { Modal } from "@/components/shared/modal"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -32,9 +45,16 @@ type EditDraft = {
   quantities: Record<string, string>
 }
 
+function statusTone(status: string) {
+  if (status === "cancelled") return "danger" as const
+  if (status === "completed") return "info" as const
+  return "warning" as const
+}
+
 export function UsageManager({
   usage,
   canRecord,
+  canManage = false,
   recordHref = "/production/usage/new",
   settings,
   currentUserId,
@@ -42,6 +62,7 @@ export function UsageManager({
 }: {
   usage: ProductionUsageWithRelations[]
   canRecord: boolean
+  canManage?: boolean
   recordHref?: string
   settings: UsageSettings
   currentUserId: string | null
@@ -51,28 +72,54 @@ export function UsageManager({
   const nowDate = React.useMemo(() => new Date(now), [now])
   const batches = React.useMemo(() => groupProductionUsage(usage), [usage])
 
+  const [viewing, setViewing] = React.useState<ProductionUsageBatch | null>(null)
   const [editing, setEditing] = React.useState<ProductionUsageBatch | null>(null)
   const [draft, setDraft] = React.useState<EditDraft>({
     usageDate: "",
     notes: "",
     quantities: {},
   })
-  const [saving, setSaving] = React.useState(false)
+  const [saving, setSaving] = React.useState<string | null>(null)
+
+  const statusOf = React.useCallback(
+    (item: ProductionUsageWithRelations) =>
+      resolveUsageStatus(item, settings, nowDate),
+    [settings, nowDate]
+  )
 
   function batchStatus(batch: ProductionUsageBatch) {
-    const statuses = batch.items.map((item) =>
-      resolveUsageStatus(item, settings, nowDate)
-    )
+    const statuses = batch.items.map(statusOf)
     if (statuses.every((status) => status === "cancelled")) return "cancelled"
     if (statuses.every((status) => status !== "submitted")) return "completed"
     return "submitted"
   }
 
-  function canEdit(batch: ProductionUsageBatch) {
-    if (!settings.allowSubmitterEdit || !currentUserId) return false
-    return batch.items.every((item) =>
-      canSubmitterEditUsage(item, settings, currentUserId, nowDate)
-    )
+  function batchMeta(batch: ProductionUsageBatch) {
+    const statuses = batch.items.map(statusOf)
+    const cancelled = statuses.filter((status) => status === "cancelled").length
+    const active = statuses.length - cancelled
+    const owned =
+      Boolean(currentUserId) &&
+      batch.items.every(
+        (item) => (item.submitted_by ?? item.recorded_by) === currentUserId
+      )
+    const submitterEditable =
+      Boolean(currentUserId) &&
+      settings.allowSubmitterEdit &&
+      owned &&
+      batch.items.every((item) =>
+        canSubmitterEditUsage(item, settings, currentUserId, nowDate)
+      )
+
+    return {
+      cancelled,
+      active,
+      owned,
+      submitterEditable,
+      canEdit: active > 0 && (canManage || submitterEditable),
+      canCancel: active > 0 && (canManage || submitterEditable),
+      canRestore: canManage && cancelled > 0,
+    }
   }
 
   function openEditor(batch: ProductionUsageBatch) {
@@ -89,7 +136,19 @@ export function UsageManager({
   async function saveOwnUsage() {
     if (!editing) return
 
-    const items = editing.items.map((item) => ({
+    const editableItems = editing.items.filter(
+      (item) => statusOf(item) !== "cancelled"
+    )
+    if (editableItems.length === 0) {
+      toast.add({
+        type: "error",
+        title: "Nothing to edit",
+        description: "Cancelled usage lines must be restored first.",
+      })
+      return
+    }
+
+    const items = editableItems.map((item) => ({
       id: item.id,
       quantity: Number(draft.quantities[item.id]),
     }))
@@ -110,19 +169,28 @@ export function UsageManager({
       return
     }
 
-    setSaving(true)
-    const result = await updateOwnProductionUsage({
-      ids: editing.items.map((item) => item.id),
-      usageDate: draft.usageDate,
-      notes: draft.notes.trim() || null,
-      items,
-    })
-    setSaving(false)
+    setSaving("save")
+    const result = canManage
+      ? await updateProductionUsageLines({
+          lines: items.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            usageDate: draft.usageDate,
+            notes: draft.notes.trim() || null,
+          })),
+        })
+      : await updateOwnProductionUsage({
+          ids: items.map((item) => item.id),
+          usageDate: draft.usageDate,
+          notes: draft.notes.trim() || null,
+          items,
+        })
+    setSaving(null)
 
     if (!result.success) {
       toast.add({
         type: "error",
-        title: "Could not update your usage",
+        title: canManage ? "Could not save the usage" : "Could not update your usage",
         description: result.error,
       })
       return
@@ -137,8 +205,10 @@ export function UsageManager({
     router.refresh()
   }
 
-  async function cancelOwnUsage() {
-    if (!editing) return
+  async function cancelUsage(batch: ProductionUsageBatch) {
+    const meta = batchMeta(batch)
+    if (meta.active === 0) return
+
     if (
       !window.confirm(
         "Mark this usage as a cancellation? BOM components in the same usage entry are cancelled too. This is recorded in the usage changelog."
@@ -147,17 +217,21 @@ export function UsageManager({
       return
     }
 
-    setSaving(true)
-    const result = await updateOwnProductionUsage({
-      ids: editing.items.map((item) => item.id),
-      cancel: true,
-    })
-    setSaving(false)
+    setSaving("cancel")
+    const ids = batch.items.map((item) => item.id)
+    const result = canManage
+      ? await setProductionUsageStatus({
+          ids,
+          status: "cancelled",
+          reason: "Cancelled from the usage list.",
+        })
+      : await updateOwnProductionUsage({ ids, cancel: true })
+    setSaving(null)
 
     if (!result.success) {
       toast.add({
         type: "error",
-        title: "Could not cancel your usage",
+        title: "Could not cancel the usage",
         description: result.error,
       })
       return
@@ -168,6 +242,43 @@ export function UsageManager({
       type: "success",
       title: "Usage cancelled",
       description: "The cancellation was recorded in the usage changelog.",
+    })
+    router.refresh()
+  }
+
+  async function restoreUsage(batch: ProductionUsageBatch) {
+    const meta = batchMeta(batch)
+    if (meta.cancelled === 0) return
+
+    if (
+      !window.confirm(
+        "Restore this usage to submitted? BOM components in the same usage entry are restored too."
+      )
+    ) {
+      return
+    }
+
+    setSaving("restore")
+    const result = await setProductionUsageStatus({
+      ids: batch.items.map((item) => item.id),
+      status: "submitted",
+      reason: "Restored from the usage list.",
+    })
+    setSaving(null)
+
+    if (!result.success) {
+      toast.add({
+        type: "error",
+        title: "Could not restore the usage",
+        description: result.error,
+      })
+      return
+    }
+
+    toast.add({
+      type: "success",
+      title: "Usage restored",
+      description: "The usage is submitted again and recorded in the changelog.",
     })
     router.refresh()
   }
@@ -185,13 +296,7 @@ export function UsageManager({
           <StatusBadge
             status={batchStatus(row)}
             label={usageStatusLabel(batchStatus(row))}
-            tone={
-              batchStatus(row) === "cancelled"
-                ? "danger"
-                : batchStatus(row) === "completed"
-                  ? "info"
-                  : "warning"
-            }
+            tone={statusTone(batchStatus(row))}
           />
         </div>
       ),
@@ -224,7 +329,7 @@ export function UsageManager({
       cell: (row) => (
         <div className="space-y-1">
           {row.items.map((item) => {
-            const status = resolveUsageStatus(item, settings, nowDate)
+            const status = statusOf(item)
             return (
               <div
                 key={item.id}
@@ -300,18 +405,67 @@ export function UsageManager({
       id: "actions",
       header: "",
       align: "right",
-      cell: (row) =>
-        canEdit(row) ? (
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => openEditor(row)}
-            aria-label="Edit your usage"
-          >
-            <Pencil />
-            Edit
-          </Button>
-        ) : null,
+      cell: (row) => {
+        const meta = batchMeta(row)
+        const busy = saving !== null
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="View usage details"
+              title="View"
+              onClick={() => setViewing(row)}
+            >
+              <Eye />
+            </Button>
+            {meta.canEdit ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Edit usage"
+                title="Edit"
+                disabled={busy}
+                onClick={() => openEditor(row)}
+              >
+                <Pencil />
+              </Button>
+            ) : null}
+            {meta.canCancel ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Mark usage as cancellation"
+                title="Cancellation"
+                disabled={busy}
+                onClick={() => void cancelUsage(row)}
+              >
+                {saving === "cancel" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Ban className="text-destructive" />
+                )}
+              </Button>
+            ) : null}
+            {meta.canRestore ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Restore cancelled usage"
+                title="Restore"
+                disabled={busy}
+                onClick={() => void restoreUsage(row)}
+              >
+                {saving === "restore" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Undo2 className="text-emerald-600 dark:text-emerald-400" />
+                )}
+              </Button>
+            ) : null}
+          </div>
+        )
+      },
     },
   ]
 
@@ -355,16 +509,124 @@ export function UsageManager({
       />
 
       <Modal
+        open={viewing !== null}
+        onOpenChange={(open) => {
+          if (!open) setViewing(null)
+        }}
+        title="Usage details"
+        description={
+          viewing
+            ? `${viewing.pipeline?.name ?? "Pipeline"} · ${
+                viewing.stage?.name ?? "Stage"
+              } · ${formatDate(viewing.usageDate)}`
+            : undefined
+        }
+        footer={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setViewing(null)}
+          >
+            Close
+          </Button>
+        }
+      >
+        {viewing ? (
+          <div className="space-y-3">
+            <div className="grid gap-2 rounded-md border bg-muted/20 p-2.5 text-xs sm:grid-cols-2">
+              <div>
+                <p className="text-[0.625rem] text-muted-foreground">Status</p>
+                <StatusBadge
+                  status={batchStatus(viewing)}
+                  label={usageStatusLabel(batchStatus(viewing))}
+                  tone={statusTone(batchStatus(viewing))}
+                />
+              </div>
+              <div>
+                <p className="text-[0.625rem] text-muted-foreground">
+                  Submitted by
+                </p>
+                <p>
+                  {viewing.submitter
+                    ? `${viewing.submitter.first_name} ${viewing.submitter.last_name}`
+                    : viewing.submittedBy
+                      ? `User ${viewing.submittedBy.slice(0, 8)}`
+                      : "Unknown user"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[0.625rem] text-muted-foreground">Recorded</p>
+                <p>{formatDate(viewing.recordedAt)}</p>
+              </div>
+              <div>
+                <p className="text-[0.625rem] text-muted-foreground">Notes</p>
+                <p>{viewing.notes || "—"}</p>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/60 text-[0.625rem] text-muted-foreground">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-medium">SKU</th>
+                    <th className="px-2 py-1.5 text-right font-medium">
+                      Quantity
+                    </th>
+                    <th className="px-2 py-1.5 text-left font-medium">Unit</th>
+                    <th className="px-2 py-1.5 text-left font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewing.items.map((item) => {
+                    const status = statusOf(item)
+                    return (
+                      <tr key={item.id} className="border-t">
+                        <td className="px-2 py-1.5">
+                          <p className="font-medium">
+                            {item.sku?.name ?? "Legacy run usage"}
+                          </p>
+                          <p className="font-mono text-[0.625rem] text-muted-foreground">
+                            {item.sku?.sku_code ?? "—"}
+                          </p>
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
+                          {formatNumber(item.quantity)}
+                        </td>
+                        <td className="px-2 py-1.5 text-muted-foreground">
+                          {item.uom ?? "—"}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <StatusBadge
+                            status={status}
+                            label={usageStatusLabel(status)}
+                            tone={statusTone(status)}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
         open={editing !== null}
         onOpenChange={(open) => {
           if (!open) setEditing(null)
         }}
-        title="Edit your usage"
+        title="Edit usage"
         description={
           editing
             ? `${editing.pipeline?.name ?? "Pipeline"} · ${
                 editing.stage?.name ?? "Stage"
-              } · ${editing.items.length} SKU line(s). You can edit until the cutoff, then an administrator must correct it.`
+              } · ${editing.items.length} SKU line(s).${
+                canManage
+                  ? " As a usage editor you can correct completed usage; every change is recorded in the changelog."
+                  : " You can edit until the cutoff, then an administrator must correct it."
+              }`
             : undefined
         }
         footer={
@@ -373,21 +635,35 @@ export function UsageManager({
               variant="outline"
               size="sm"
               onClick={() => setEditing(null)}
-              disabled={saving}
+              disabled={saving !== null}
             >
               Cancel
             </Button>
+            {editing && batchMeta(editing).canCancel ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void cancelUsage(editing)}
+                disabled={saving !== null}
+              >
+                {saving === "cancel" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Ban />
+                )}
+                Mark cancellation
+              </Button>
+            ) : null}
             <Button
-              variant="destructive"
               size="sm"
-              onClick={cancelOwnUsage}
-              disabled={saving}
+              onClick={saveOwnUsage}
+              disabled={saving !== null}
             >
-              {saving ? <Loader2 className="animate-spin" /> : <Ban />}
-              Mark cancellation
-            </Button>
-            <Button size="sm" onClick={saveOwnUsage} disabled={saving}>
-              {saving ? <Loader2 className="animate-spin" /> : <Save />}
+              {saving === "save" ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Save />
+              )}
               Save changes
             </Button>
           </>
@@ -427,49 +703,56 @@ export function UsageManager({
             </div>
 
             <div className="space-y-2">
-              {editing.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-2 py-1.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-medium">
-                      {item.sku?.name ?? "Legacy run usage"}
-                    </p>
-                    <p className="font-mono text-[0.625rem] text-muted-foreground">
-                      {item.sku?.sku_code ?? "—"}
-                    </p>
+              {editing.items.map((item) => {
+                const status = statusOf(item)
+                const cancelled = status === "cancelled"
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-2 py-1.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium">
+                        {item.sku?.name ?? "Legacy run usage"}
+                      </p>
+                      <p className="font-mono text-[0.625rem] text-muted-foreground">
+                        {item.sku?.sku_code ?? "—"}
+                        {cancelled ? " · cancelled" : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={draft.quantities[item.id] ?? ""}
+                        disabled={cancelled}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            quantities: {
+                              ...current.quantities,
+                              [item.id]: event.target.value,
+                            },
+                          }))
+                        }
+                        className="h-7 w-28 text-right tabular-nums"
+                        aria-label={`Quantity for ${item.sku?.sku_code ?? "usage line"}`}
+                      />
+                      <span className="w-10 text-[0.625rem] text-muted-foreground">
+                        {item.uom ?? ""}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={draft.quantities[item.id] ?? ""}
-                      onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          quantities: {
-                            ...current.quantities,
-                            [item.id]: event.target.value,
-                          },
-                        }))
-                      }
-                      className="h-7 w-28 text-right tabular-nums"
-                      aria-label={`Quantity for ${item.sku?.sku_code ?? "usage line"}`}
-                    />
-                    <span className="w-10 text-[0.625rem] text-muted-foreground">
-                      {item.uom ?? ""}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             <p className="text-[0.625rem] text-muted-foreground">
-              Editing is limited to your own submitted usage inside the cutoff
-              window. Cancelling replaces deletion and is recorded in the usage
-              changelog.
+              {canManage
+                ? "Usage editors can correct any active line. Cancelled lines stay read-only until they are restored."
+                : "Editing is limited to your own submitted usage inside the cutoff window."}{" "}
+              Every change is recorded in the usage changelog.
             </p>
           </div>
         ) : null}

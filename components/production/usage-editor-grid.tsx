@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 
 import {
+  downloadProductionUsageTemplate,
   exportProductionUsage,
   getProductionUsageChangelog,
   importProductionUsageUpdates,
@@ -513,6 +514,29 @@ export function ProductionUsageEditorGrid({
     })
   }
 
+  async function handleTemplate() {
+    setBusy("template")
+    const response = await downloadProductionUsageTemplate()
+    setBusy(null)
+
+    if (!response.success) {
+      toast.add({
+        type: "error",
+        title: "Could not download the template",
+        description: response.error,
+      })
+      return
+    }
+
+    downloadCsv(response.data.filename, response.data.csv)
+    toast.add({
+      type: "success",
+      title: "Import template downloaded",
+      description:
+        "Fill in the columns and leave batch_id blank to add new usage rows.",
+    })
+  }
+
   async function readFile(file: File | undefined) {
     if (!file) {
       setCsv("")
@@ -548,13 +572,13 @@ export function ProductionUsageEditorGrid({
       toast.add({
         type: "warning",
         title: "Import needs review",
-        description: `${response.data.updated} line(s) updated, ${response.data.conflicts.length} conflict(s) left for review.`,
+        description: `${response.data.updated} updated, ${response.data.created} added, ${response.data.conflicts.length} conflict(s) left for review.`,
       })
     } else {
       toast.add({
         type: "success",
         title: "Import finished",
-        description: `${response.data.updated} line(s) updated.`,
+        description: `${response.data.updated} line(s) updated, ${response.data.created} line(s) added.`,
       })
     }
 
@@ -1257,10 +1281,23 @@ export function ProductionUsageEditorGrid({
           }
         }}
         title="Mass import usage updates"
-        description="Export the current usage, edit quantities, dates, notes or status in your spreadsheet, then import the CSV back. Rows whose baseline changed are returned for review instead of being applied."
+        description="Export the current usage, edit quantities, dates, notes or status in your spreadsheet, then import the CSV back. Existing lines are updated and rows that do not exist yet are added, subject to the usage settings. Rows whose baseline changed are returned for review."
         size="xl"
         footer={
           <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleTemplate}
+              disabled={busy !== null}
+            >
+              {busy === "template" ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <FileSpreadsheet />
+              )}
+              {busy === "template" ? "Preparing…" : "Download template"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1300,14 +1337,15 @@ export function ProductionUsageEditorGrid({
             <p className="text-[0.625rem] text-muted-foreground">
               {fileName
                 ? `Selected: ${fileName}`
-                : "Select the CSV exported from here after editing it. Keep previous_quantity and updated_at intact so conflicts can be detected. Set status to cancelled to cancel a line, or submitted to restore it."}
+                : "Select a CSV exported from here, or download the template. Leave batch_id blank to add a new usage row; keep previous_quantity and updated_at intact so conflicts can be detected. Set status to cancelled to cancel a line, or submitted to restore it."}
             </p>
           </div>
 
           {importResult ? (
             <div className="space-y-2 rounded-md border bg-muted/20 p-3">
               <p className="text-xs font-medium">
-                {importResult.updated} updated · {importResult.skipped} skipped ·{" "}
+                {importResult.updated} updated · {importResult.created} added ·{" "}
+                {importResult.skipped} skipped ·{" "}
                 {importResult.conflicts.length} conflict
                 {importResult.conflicts.length === 1 ? "" : "s"}
               </p>

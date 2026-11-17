@@ -808,16 +808,15 @@ export async function createProductionUsage(
   if (!pipeline) return failure("Production pipeline not found in this company.")
 
   const skuIds = Array.from(itemsBySku.keys())
-  const { data: assignments, error: assignmentError } = await supabase
+  const { data: stageAssignments, error: assignmentError } = await supabase
     .from("production_stage_skus")
     .select("sku_id, sku:skus(id, sku_code, name, uom)")
     .eq("company_id", companyId)
     .eq("stage_id", stage.id)
-    .in("sku_id", skuIds)
   if (assignmentError) return failure(assignmentError.message)
 
   const assignedSkus = new Map(
-    ((assignments ?? []) as unknown as {
+    ((stageAssignments ?? []) as unknown as {
       sku_id: string
       sku: {
         id: string
@@ -828,7 +827,56 @@ export async function createProductionUsage(
     }[]).map((assignment) => [assignment.sku_id, assignment.sku])
   )
 
-  if (assignedSkus.size !== skuIds.length) {
+  // Component SKUs are shown on the stage so BOM auto-expansion can create
+  // usage lines for them. They are not stored in production_stage_skus, so
+  // allow any component of an assigned BOM parent as well.
+  const assignedParentIds = Array.from(assignedSkus.keys())
+  const { data: componentAssignmentRows, error: componentAssignmentError } =
+    await supabase
+      .from("sku_components")
+      .select("parent_sku_id, component_sku_id")
+      .eq("company_id", companyId)
+      .in("parent_sku_id", assignedParentIds)
+
+  if (componentAssignmentError) {
+    return failure(componentAssignmentError.message)
+  }
+
+  const componentSkuIds = new Set(
+    ((componentAssignmentRows ?? []) as {
+      parent_sku_id: string
+      component_sku_id: string
+    }[]).map((row) => row.component_sku_id)
+  )
+
+  const missingComponentSkus = Array.from(componentSkuIds).filter(
+    (id) => !assignedSkus.has(id)
+  )
+  if (missingComponentSkus.length > 0) {
+    const { data: componentSkus, error: componentSkuError } = await supabase
+      .from("skus")
+      .select("id, sku_code, name, uom")
+      .eq("company_id", companyId)
+      .in("id", missingComponentSkus)
+
+    if (componentSkuError) return failure(componentSkuError.message)
+
+    for (const sku of (componentSkus ?? []) as {
+      id: string
+      sku_code: string
+      name: string
+      uom: string | null
+    }[]) {
+      assignedSkus.set(sku.id, sku)
+    }
+  }
+
+  const allowedSkuIds = new Set([
+    ...assignedSkus.keys(),
+    ...componentSkuIds,
+  ])
+  const missingSkus = skuIds.filter((id) => !allowedSkuIds.has(id))
+  if (missingSkus.length > 0) {
     return failure("One or more selected SKUs are not assigned to this stage.")
   }
 
@@ -865,17 +913,17 @@ export async function createProductionUsage(
   const notes = input.notes?.trim() || null
 
   // Duplicate submissions for the same stage, SKU and usage date are blocked
-  // unless the company configuration allows them. Cancelled lines do not
-  // count as an existing submission.
+  // unless the company configuration allows them. A line only counts as a
+  // duplicate while it is active: when every existing line for that SKU on the
+  // date is cancelled, the user may submit the SKU again.
   const settings = await loadUsageSettings(supabase, companyId)
   if (!settings.allowDuplicates) {
     const { data: existingRows, error: existingError } = await supabase
       .from("production_usage")
-      .select("sku_id")
+      .select("sku_id, status")
       .eq("company_id", companyId)
       .eq("stage_id", stage.id)
       .eq("usage_date", usageDate)
-      .neq("status", "cancelled")
       .in("sku_id", skuIds)
 
     if (existingError) {
@@ -884,7 +932,8 @@ export async function createProductionUsage(
     }
 
     const duplicateSkuIds = new Set(
-      ((existingRows ?? []) as { sku_id: string | null }[])
+      ((existingRows ?? []) as { sku_id: string | null; status: string }[])
+        .filter((row) => row.status !== "cancelled")
         .map((row) => row.sku_id)
         .filter((id): id is string => Boolean(id))
     )
@@ -893,7 +942,7 @@ export async function createProductionUsage(
         .map((id) => assignedSkus.get(id)?.sku_code ?? id)
         .join(", ")
       return failure(
-        `Usage already exists for ${labels} on ${usageDate}. Duplicate submissions are disabled in the usage settings.`
+        `Active usage already exists for ${labels} on ${usageDate}. Cancel the existing usage first or enable duplicate usage in the settings.`
       )
     }
   }
@@ -1781,8 +1830,8 @@ const PRODUCTION_USAGE_CSV_HEADERS = [
   "batch_id",
   "usage_date",
   "pipeline_code",
-  "pipeline_name",
-  "stage",
+  "stage_sequence",
+  "stage_name",
   "sku_code",
   "sku_name",
   "status",
@@ -1839,10 +1888,8 @@ export async function exportProductionUsage(): Promise<
       row.batch_id,
       row.usage_date,
       row.pipeline?.code ?? "",
-      row.pipeline?.name ?? "",
-      row.stage
-        ? `${row.stage.sequence ?? ""}. ${row.stage.name ?? ""}`.trim()
-        : "",
+      row.stage?.sequence ?? "",
+      row.stage?.name ?? "",
       row.sku?.sku_code ?? "",
       row.sku?.name ?? "",
       row.status,
@@ -1864,6 +1911,26 @@ export async function exportProductionUsage(): Promise<
   }
 }
 
+/**
+ * Returns an empty CSV using the import headers. Leaving `batch_id` blank
+ * creates a new usage entry; filling it updates the matching entry.
+ */
+export async function downloadProductionUsageTemplate(): Promise<
+  ActionResult<ProductionUsageCsvExport>
+> {
+  const authorized = await getAuthorizedContext(PERMISSIONS.PRODUCTION_EDITOR)
+  if ("error" in authorized) return authorized.error
+
+  return {
+    success: true,
+    data: {
+      filename: "production-usage-import-template.csv",
+      csv: toCsv(PRODUCTION_USAGE_CSV_HEADERS, []),
+      rowCount: 0,
+    },
+  }
+}
+
 export type ProductionUsageImportConflict = {
   row: number
   batchId: string
@@ -1877,6 +1944,7 @@ export type ProductionUsageImportConflict = {
 
 export type ProductionUsageImportResult = {
   updated: number
+  created: number
   skipped: number
   conflicts: ProductionUsageImportConflict[]
 }
@@ -1884,6 +1952,9 @@ export type ProductionUsageImportResult = {
 type UsageImportRow = {
   id: string
   batch_id: string
+  pipeline_id: string
+  stage_id: string
+  workspace_id: string
   sku_id: string | null
   quantity: number
   usage_date: string
@@ -1892,11 +1963,38 @@ type UsageImportRow = {
   updated_at: string
 }
 
+type UsageImportSku = {
+  id: string
+  sku_code: string
+  uom: string | null
+}
+
+type UsageImportStage = {
+  id: string
+  pipeline_id: string
+  sequence: number
+  name: string
+}
+
+type UsageImportPipeline = {
+  id: string
+  code: string
+  name: string
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /**
- * Applies quantity/date/notes updates from a CSV exported with
- * `exportProductionUsage`. Rows whose baseline changed after the export (or
- * that cannot be matched unambiguously) are returned as conflicts instead of
- * being applied, so an operator can review them.
+ * Applies a usage CSV. Existing lines are updated in place and rows that do
+ * not match an existing line are created, subject to the usage settings:
+ * duplicate submissions are blocked unless the configuration allows them, and
+ * a SKU can be resubmitted once every existing line for that stage, SKU and
+ * date is cancelled.
+ *
+ * A blank `batch_id` creates a new usage entry (or updates the unique existing
+ * line for the same stage, SKU and usage date). A provided `batch_id` updates
+ * that entry, or creates a line inside it when the batch already exists.
  */
 export async function importProductionUsageUpdates(input: {
   csv: string
@@ -1918,9 +2016,9 @@ export async function importProductionUsageUpdates(input: {
   }
 
   const map = headerMap(parsed[0])
-  if (!map.has("batch_id") || !map.has("sku_code") || !map.has("quantity")) {
+  if (!map.has("sku_code") || !map.has("quantity")) {
     return failure(
-      "The CSV must include batch_id, sku_code and quantity columns. Export the current usage to get the right template."
+      "The CSV must include sku_code and quantity columns. Download the import template to get the right headers."
     )
   }
 
@@ -1932,48 +2030,125 @@ export async function importProductionUsageUpdates(input: {
         .filter((value) => value !== "")
     )
   )
+  const usageDates = Array.from(
+    new Set(
+      dataRows
+        .map((row) => cell(row, map, "usage_date"))
+        .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    )
+  )
 
-  if (batchIds.length === 0) {
-    return failure("No usage rows were found in the CSV.")
+  const settings = await loadUsageSettings(supabase, companyId)
+
+  const [pipelinesResult, stagesResult, skusResult, assignmentsResult] =
+    await Promise.all([
+      supabase
+        .from("production_pipelines")
+        .select("id, code, name")
+        .eq("company_id", companyId),
+      supabase
+        .from("production_stages")
+        .select("id, pipeline_id, sequence, name")
+        .eq("company_id", companyId),
+      supabase
+        .from("skus")
+        .select("id, sku_code, uom")
+        .eq("company_id", companyId),
+      supabase
+        .from("production_stage_skus")
+        .select("stage_id, sku_id")
+        .eq("company_id", companyId),
+    ])
+
+  if (pipelinesResult.error) {
+    console.error(
+      "[action:importProductionUsageUpdates]",
+      pipelinesResult.error
+    )
+    return failure(pipelinesResult.error.message)
+  }
+  if (stagesResult.error) {
+    console.error("[action:importProductionUsageUpdates]", stagesResult.error)
+    return failure(stagesResult.error.message)
+  }
+  if (skusResult.error) {
+    console.error("[action:importProductionUsageUpdates]", skusResult.error)
+    return failure(skusResult.error.message)
+  }
+  if (assignmentsResult.error) {
+    console.error(
+      "[action:importProductionUsageUpdates]",
+      assignmentsResult.error
+    )
+    return failure(assignmentsResult.error.message)
   }
 
-  const [usageResult, skuResult] = await Promise.all([
-    supabase
-      .from("production_usage")
-      .select("id, batch_id, sku_id, quantity, usage_date, notes, status, updated_at")
-      .eq("company_id", companyId)
-      .in("batch_id", batchIds),
-    supabase.from("skus").select("id, sku_code").eq("company_id", companyId),
+  const [byBatchResult, byDateResult] = await Promise.all([
+    batchIds.length > 0
+      ? supabase
+          .from("production_usage")
+          .select(
+            "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
+          )
+          .eq("company_id", companyId)
+          .in("batch_id", batchIds)
+      : Promise.resolve({ data: [], error: null }),
+    usageDates.length > 0
+      ? supabase
+          .from("production_usage")
+          .select(
+            "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
+          )
+          .eq("company_id", companyId)
+          .in("usage_date", usageDates)
+      : Promise.resolve({ data: [], error: null }),
   ])
 
-  if (usageResult.error) {
-    console.error("[action:importProductionUsageUpdates]", usageResult.error)
-    return failure(usageResult.error.message)
-  }
-  if (skuResult.error) {
-    console.error("[action:importProductionUsageUpdates]", skuResult.error)
-    return failure(skuResult.error.message)
+  if (byBatchResult.error || byDateResult.error) {
+    const error = byBatchResult.error ?? byDateResult.error
+    console.error("[action:importProductionUsageUpdates]", error)
+    return failure(error?.message ?? "Could not load the existing usage.")
   }
 
-  const usageRows = (usageResult.data ?? []) as UsageImportRow[]
-  const usageByKey = new Map<string, UsageImportRow>()
+  const usageRowsById = new Map<string, UsageImportRow>()
+  for (const row of [
+    ...((byBatchResult.data ?? []) as UsageImportRow[]),
+    ...((byDateResult.data ?? []) as UsageImportRow[]),
+  ]) {
+    usageRowsById.set(row.id, row)
+  }
+  const usageRows = Array.from(usageRowsById.values())
+
+  const usageByBatchSku = new Map<string, UsageImportRow>()
+  const batchById = new Map<string, UsageImportRow>()
   for (const row of usageRows) {
-    if (!row.sku_id) continue
-    usageByKey.set(`${row.batch_id}:${row.sku_id}`, row)
+    if (row.sku_id) usageByBatchSku.set(`${row.batch_id}:${row.sku_id}`, row)
+    if (!batchById.has(row.batch_id)) batchById.set(row.batch_id, row)
   }
 
-  const skuByCode = new Map<string, { id: string; sku_code: string }>()
-  for (const sku of (skuResult.data ?? []) as {
-    id: string
-    sku_code: string
-  }[]) {
+  const skuByCode = new Map<string, UsageImportSku>()
+  for (const sku of (skusResult.data ?? []) as UsageImportSku[]) {
     skuByCode.set(sku.sku_code.toUpperCase(), sku)
   }
 
+  const pipelines = (pipelinesResult.data ?? []) as UsageImportPipeline[]
+  const pipelineByCode = new Map(
+    pipelines.map((pipeline) => [pipeline.code.toUpperCase(), pipeline])
+  )
+  const stages = (stagesResult.data ?? []) as UsageImportStage[]
+
+  const assignmentKeys = new Set(
+    ((assignmentsResult.data ?? []) as {
+      stage_id: string
+      sku_id: string
+    }[]).map((row) => `${row.stage_id}:${row.sku_id}`)
+  )
+
   const conflicts: ProductionUsageImportConflict[] = []
-  const seen = new Set<string>()
   const changelog: UsageChangelogInput[] = []
+  const seen = new Set<string>()
   let updated = 0
+  let created = 0
   let skipped = 0
   const now = new Date().toISOString()
 
@@ -1993,8 +2168,11 @@ export async function importProductionUsageUpdates(input: {
         : null
 
     // Conflicts carry the values from the CSV so the usage editor can offer to
-    // delete the affected line or open it for a manual correction.
-    const conflict = (reason: string, usageRow: UsageImportRow | null = null) => {
+    // cancel the affected line or open it for a manual correction.
+    const conflict = (
+      reason: string,
+      usageRow: UsageImportRow | null = null
+    ) => {
       conflicts.push({
         row: rowNumber,
         batchId,
@@ -2011,20 +2189,20 @@ export async function importProductionUsageUpdates(input: {
       skipped += 1
     }
 
-    if (!batchId || !skuCode) {
-      conflict("batch_id and sku_code are required.")
+    if (!skuCode) {
+      conflict("sku_code is required.")
       continue
     }
 
-    const quantity = Number(quantityText)
     if (
       quantityText === "" ||
-      !Number.isFinite(quantity) ||
-      quantity < 0
+      !Number.isFinite(parsedQuantity) ||
+      parsedQuantity < 0
     ) {
       conflict("quantity must be a number greater than or equal to 0.")
       continue
     }
+    const quantity = parsedQuantity
 
     const sku = skuByCode.get(skuCode.toUpperCase())
     if (!sku) {
@@ -2032,63 +2210,21 @@ export async function importProductionUsageUpdates(input: {
       continue
     }
 
-    const key = `${batchId}:${sku.id}`
-    if (seen.has(key)) {
-      conflict("Duplicate row for the same batch and SKU.")
-      continue
-    }
-    seen.add(key)
-
-    const usageRow = usageByKey.get(key)
-    if (!usageRow) {
-      conflict("No production usage line exists for this batch and SKU.")
-      continue
-    }
-
-    const previousText = cell(row, map, "previous_quantity")
-    if (previousText !== "") {
-      const previous = Number(previousText)
-      if (
-        Number.isFinite(previous) &&
-        Math.abs(previous - Number(usageRow.quantity)) > 0.0001
-      ) {
-        conflict(
-          `Quantity changed since export (expected ${previous}, found ${usageRow.quantity}).`,
-          usageRow
-        )
-        continue
-      }
-    }
-
-    const updatedAtText = cell(row, map, "updated_at")
-    if (
-      updatedAtText &&
-      usageRow.updated_at &&
-      updatedAtText !== usageRow.updated_at
-    ) {
-      conflict("This line was modified after the CSV was exported.", usageRow)
-      continue
-    }
-
-    const usageDate = cell(row, map, "usage_date") || usageRow.usage_date
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(usageDate)) {
-      conflict("usage_date must use the YYYY-MM-DD format.", usageRow)
-      continue
-    }
-
-    const notes = map.has("notes")
-      ? cell(row, map, "notes") || null
-      : usageRow.notes
+    const batchRow = batchId ? batchById.get(batchId) : undefined
+    const batchSkuKey = batchId ? `${batchId}:${sku.id}` : ""
+    let usageRow = batchId ? usageByBatchSku.get(batchSkuKey) : undefined
 
     // The status column drives the lifecycle. Cancelled lines are read-only,
     // so a row can only be restored (status = submitted) before it is edited.
     const statusText = map.has("status")
       ? cell(row, map, "status").toLowerCase()
       : ""
-    const desiredStatus =
+    const desiredStatus: "submitted" | "cancelled" | null | undefined =
       statusText === "cancelled" || statusText === "cancellation"
         ? "cancelled"
-        : statusText === "submitted" || statusText === "completed" || statusText === ""
+        : statusText === "submitted" ||
+            statusText === "completed" ||
+            statusText === ""
           ? statusText === ""
             ? null
             : "submitted"
@@ -2097,39 +2233,285 @@ export async function importProductionUsageUpdates(input: {
     if (desiredStatus === undefined) {
       conflict(
         `Unknown status "${statusText}". Use submitted or cancelled.`,
-        usageRow
+        usageRow ?? null
       )
       continue
     }
 
-    if (statusText === "") {
-      if (usageRow.status === "cancelled") {
+    // If the CSV has no batch id, update the unique existing line for the same
+    // stage, SKU and date instead of creating a duplicate.
+    let resolvedStageId = batchRow?.stage_id ?? ""
+    let resolvedPipelineId = batchRow?.pipeline_id ?? ""
+    const resolvedDate =
+      usageDateText || batchRow?.usage_date?.slice(0, 10) || ""
+    const resolvedWorkspaceId = batchRow?.workspace_id ?? workspaceId
+
+    if (!resolvedStageId) {
+      const pipelineCode = cell(row, map, "pipeline_code")
+      const pipeline = pipelineCode
+        ? pipelineByCode.get(pipelineCode.toUpperCase())
+        : undefined
+      if (pipelineCode && !pipeline) {
+        conflict(`Unknown pipeline code "${pipelineCode}".`)
+        continue
+      }
+
+      const sequenceText = cell(row, map, "stage_sequence")
+      const stageName = cell(row, map, "stage_name")
+      const legacyStage = cell(row, map, "stage")
+      const legacySequence = legacyStage
+        ? Number(legacyStage.split(".")[0])
+        : Number.NaN
+      const parsedSequence = sequenceText
+        ? Number(sequenceText)
+        : legacySequence
+      const sequence = Number.isFinite(parsedSequence)
+        ? parsedSequence
+        : null
+      const name =
+        stageName ||
+        (legacyStage ? legacyStage.replace(/^\d+\.\s*/, "") : "")
+
+      const candidates = stages.filter(
+        (stage) =>
+          (!pipeline || stage.pipeline_id === pipeline.id) &&
+          (sequence === null || stage.sequence === sequence) &&
+          (!name || stage.name.toLowerCase() === name.toLowerCase())
+      )
+
+      if (candidates.length === 0) {
+        conflict(
+          "Could not resolve the stage. Provide pipeline_code and stage_sequence (or stage_name) for a new usage row."
+        )
+        continue
+      }
+      if (candidates.length > 1) {
+        conflict(
+          "The stage is ambiguous. Add pipeline_code or stage_sequence to identify it."
+        )
+        continue
+      }
+
+      resolvedStageId = candidates[0].id
+      resolvedPipelineId = candidates[0].pipeline_id
+    }
+
+    if (!usageRow && !batchId) {
+      const matches = usageRows.filter(
+        (candidate) =>
+          candidate.sku_id === sku.id &&
+          candidate.stage_id === resolvedStageId &&
+          candidate.usage_date.slice(0, 10) === resolvedDate
+      )
+      if (matches.length === 1) {
+        usageRow = matches[0]
+      } else if (matches.length > 1) {
+        conflict(
+          "Multiple usage lines match this stage, SKU and date. Add batch_id to identify the line."
+        )
+        continue
+      }
+    }
+
+    if (usageRow) {
+      const lineKey = `${usageRow.batch_id}:${usageRow.sku_id ?? usageRow.id}`
+      if (seen.has(lineKey)) {
+        conflict("Duplicate row for the same batch and SKU.", usageRow)
+        continue
+      }
+      seen.add(lineKey)
+
+      if (statusText === "" && usageRow.status === "cancelled") {
         conflict(
           "This usage line was cancelled. Set its status to submitted to restore it first.",
           usageRow
         )
         continue
       }
-    }
 
-    if (usageRow.status === "cancelled" && desiredStatus !== "submitted") {
-      conflict(
-        "This usage line was cancelled. Set its status to submitted to restore it first.",
-        usageRow
-      )
-      continue
-    }
+      if (usageRow.status === "cancelled" && desiredStatus !== "submitted") {
+        skipped += 1
+        continue
+      }
 
-    if (desiredStatus === "cancelled") {
+      if (desiredStatus === "cancelled") {
+        const previousText = cell(row, map, "previous_quantity")
+        if (previousText !== "") {
+          const previous = Number(previousText)
+          if (
+            Number.isFinite(previous) &&
+            Math.abs(previous - Number(usageRow.quantity)) > 0.0001
+          ) {
+            conflict(
+              `Quantity changed since export (expected ${previous}, found ${usageRow.quantity}).`,
+              usageRow
+            )
+            continue
+          }
+        }
+
+        const updatedAtText = cell(row, map, "updated_at")
+        if (
+          updatedAtText &&
+          usageRow.updated_at &&
+          updatedAtText !== usageRow.updated_at
+        ) {
+          conflict(
+            "This line was modified after the CSV was exported.",
+            usageRow
+          )
+          continue
+        }
+
+        const affectedIds = await expandBomComponentRows(supabase, companyId, [
+          usageRow,
+        ])
+
+        const { data: affectedRows, error: affectedError } = await supabase
+          .from("production_usage")
+          .select("id, batch_id, status")
+          .eq("company_id", companyId)
+          .in("id", Array.from(affectedIds))
+
+        if (affectedError) {
+          console.error(
+            "[action:importProductionUsageUpdates]",
+            affectedError
+          )
+          conflict(
+            `Could not cancel the line: ${affectedError.message}`,
+            usageRow
+          )
+          continue
+        }
+
+        const { error } = await supabase
+          .from("production_usage")
+          .update({ status: "cancelled", updated_at: now })
+          .eq("company_id", companyId)
+          .in("id", Array.from(affectedIds))
+
+        if (error) {
+          console.error("[action:importProductionUsageUpdates]", error)
+          conflict(`Could not cancel the line: ${error.message}`, usageRow)
+          continue
+        }
+
+        for (const target of (affectedRows ?? []) as {
+          id: string
+          batch_id: string | null
+          status: string
+        }[]) {
+          if (target.status === "cancelled") continue
+          changelog.push({
+            usage_id: target.id,
+            batch_id: target.batch_id,
+            action: "import",
+            previous_values: { status: target.status },
+            new_values: { status: "cancelled" },
+            reason:
+              target.id === usageRow.id
+                ? "Cancelled through a usage import."
+                : "Cancelled as a BOM component through a usage import.",
+          })
+        }
+
+        updated += 1
+        continue
+      }
+
+      const previousText = cell(row, map, "previous_quantity")
+      if (previousText !== "") {
+        const previous = Number(previousText)
+        if (
+          Number.isFinite(previous) &&
+          Math.abs(previous - Number(usageRow.quantity)) > 0.0001
+        ) {
+          conflict(
+            `Quantity changed since export (expected ${previous}, found ${usageRow.quantity}).`,
+            usageRow
+          )
+          continue
+        }
+      }
+
+      const updatedAtText = cell(row, map, "updated_at")
+      if (
+        updatedAtText &&
+        usageRow.updated_at &&
+        updatedAtText !== usageRow.updated_at
+      ) {
+        conflict("This line was modified after the CSV was exported.", usageRow)
+        continue
+      }
+
+      const usageDate = resolvedDate || usageRow.usage_date
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(usageDate)) {
+        conflict("usage_date must use the YYYY-MM-DD format.", usageRow)
+        continue
+      }
+
+      const notes = map.has("notes")
+        ? cell(row, map, "notes") || null
+        : usageRow.notes
+      const nextStatus =
+        usageRow.status === "cancelled" ? "submitted" : usageRow.status
+      const dateChanged =
+        usageDate !== usageRow.usage_date.slice(0, 10)
+
+      // A restored line and a line moved to another date can collide with an
+      // active line, so the duplicate rule applies to updates as well.
+      if (
+        !settings.allowDuplicates &&
+        (dateChanged || usageRow.status === "cancelled")
+      ) {
+        const { data: duplicateRows, error: duplicateError } = await supabase
+          .from("production_usage")
+          .select("id")
+          .eq("company_id", companyId)
+          .eq("stage_id", usageRow.stage_id)
+          .eq("sku_id", usageRow.sku_id)
+          .eq("usage_date", usageDate)
+          .neq("id", usageRow.id)
+          .neq("status", "cancelled")
+          .limit(1)
+
+        if (duplicateError) {
+          console.error(
+            "[action:importProductionUsageUpdates]",
+            duplicateError
+          )
+          conflict(
+            `Could not check existing usage: ${duplicateError.message}`,
+            usageRow
+          )
+          continue
+        }
+
+        if ((duplicateRows ?? []).length > 0) {
+          conflict(
+            `Active usage already exists for this SKU on ${usageDate}. Cancel it first or enable duplicate usage in the settings.`,
+            usageRow
+          )
+          continue
+        }
+      }
+
       const { error } = await supabase
         .from("production_usage")
-        .update({ status: "cancelled", updated_at: now })
+        .update({
+          quantity,
+          usage_date: usageDate,
+          notes,
+          status: nextStatus,
+          updated_at: now,
+        })
         .eq("id", usageRow.id)
         .eq("company_id", companyId)
 
       if (error) {
         console.error("[action:importProductionUsageUpdates]", error)
-        conflict(`Could not cancel the line: ${error.message}`, usageRow)
+        conflict(`Could not update the line: ${error.message}`, usageRow)
         continue
       }
 
@@ -2137,55 +2519,137 @@ export async function importProductionUsageUpdates(input: {
         usage_id: usageRow.id,
         batch_id: usageRow.batch_id,
         action: "import",
-        previous_values: { status: usageRow.status },
-        new_values: { status: "cancelled" },
-        reason: "Cancelled through a usage import.",
+        previous_values: {
+          quantity: Number(usageRow.quantity),
+          usage_date: usageRow.usage_date?.slice(0, 10) ?? null,
+          notes: usageRow.notes,
+          status: usageRow.status,
+        },
+        new_values: {
+          quantity,
+          usage_date: usageDate,
+          notes,
+          status: nextStatus,
+        },
+        reason: "Updated through a usage import.",
       })
+
       updated += 1
       continue
     }
 
-    const nextStatus =
-      usageRow.status === "cancelled" ? "submitted" : usageRow.status
+    // No existing line matches: create it, subject to the duplicate rules and
+    // stage assignment.
+    if (desiredStatus === "cancelled") {
+      conflict("Cannot create a new line with a cancelled status.")
+      continue
+    }
 
-    const { error } = await supabase
+    if (!resolvedDate) {
+      conflict("usage_date is required for a new usage row.")
+      continue
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(resolvedDate)) {
+      conflict("usage_date must use the YYYY-MM-DD format.")
+      continue
+    }
+    if (!resolvedStageId || !resolvedPipelineId) {
+      conflict(
+        "Could not resolve the pipeline and stage for a new usage row. Provide pipeline_code and stage_sequence."
+      )
+      continue
+    }
+    if (!resolvedWorkspaceId) {
+      conflict("No workspace is associated with your account.")
+      continue
+    }
+    if (!assignmentKeys.has(`${resolvedStageId}:${sku.id}`)) {
+      conflict(`SKU "${sku.sku_code}" is not assigned to the resolved stage.`)
+      continue
+    }
+
+    const newBatchId = batchId || randomUUID()
+    if (batchId && !UUID_PATTERN.test(batchId)) {
+      conflict("batch_id must be a valid UUID when it is provided.")
+      continue
+    }
+
+    const duplicateKey = `${newBatchId}:${sku.id}`
+    if (seen.has(duplicateKey)) {
+      conflict("Duplicate row for the same batch and SKU.")
+      continue
+    }
+    seen.add(duplicateKey)
+
+    if (!settings.allowDuplicates) {
+      const { data: activeRows, error: activeError } = await supabase
+        .from("production_usage")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("stage_id", resolvedStageId)
+        .eq("sku_id", sku.id)
+        .eq("usage_date", resolvedDate)
+        .neq("status", "cancelled")
+        .limit(1)
+
+      if (activeError) {
+        console.error("[action:importProductionUsageUpdates]", activeError)
+        conflict(`Could not check existing usage: ${activeError.message}`)
+        continue
+      }
+      if ((activeRows ?? []).length > 0) {
+        conflict(
+          `Active usage already exists for ${sku.sku_code} on ${resolvedDate}. Cancel it first or enable duplicate usage in the settings.`
+        )
+        continue
+      }
+    }
+
+    const notes = map.has("notes") ? cell(row, map, "notes") || null : null
+
+    const { data: inserted, error } = await supabase
       .from("production_usage")
-      .update({
+      .insert({
+        company_id: companyId,
+        workspace_id: resolvedWorkspaceId,
+        pipeline_id: resolvedPipelineId,
+        stage_id: resolvedStageId,
+        batch_id: newBatchId,
+        sku_id: sku.id,
         quantity,
-        usage_date: usageDate,
+        uom: sku.uom || null,
+        usage_date: resolvedDate,
         notes,
-        status: nextStatus,
+        status: "submitted",
+        submitted_by: userId,
+        recorded_by: userId,
+        recorded_at: now,
         updated_at: now,
       })
-      .eq("id", usageRow.id)
-      .eq("company_id", companyId)
+      .select("id")
+      .single()
 
-    if (error) {
+    if (error || !inserted) {
       console.error("[action:importProductionUsageUpdates]", error)
-      conflict(`Could not update the line: ${error.message}`, usageRow)
+      conflict(`Could not add the line: ${error?.message ?? "unknown error"}`)
       continue
     }
 
     changelog.push({
-      usage_id: usageRow.id,
-      batch_id: usageRow.batch_id,
+      usage_id: (inserted as { id: string }).id,
+      batch_id: newBatchId,
       action: "import",
-      previous_values: {
-        quantity: Number(usageRow.quantity),
-        usage_date: usageRow.usage_date?.slice(0, 10) ?? null,
-        notes: usageRow.notes,
-        status: usageRow.status,
-      },
       new_values: {
+        sku_id: sku.id,
         quantity,
-        usage_date: usageDate,
+        usage_date: resolvedDate,
         notes,
-        status: nextStatus,
+        status: "submitted",
       },
-      reason: "Updated through a usage import.",
+      reason: "Added through a usage import.",
     })
 
-    updated += 1
+    created += 1
   }
 
   await recordUsageChangelog(
@@ -2201,9 +2665,10 @@ export async function importProductionUsageUpdates(input: {
     {
       action: "import",
       entityType: "production_usage",
-      summary: `Imported production usage updates: ${updated} line(s) updated, ${conflicts.length} conflict(s)`,
+      summary: `Imported production usage: ${updated} updated, ${created} added, ${conflicts.length} conflict(s)`,
       metadata: {
         updated,
+        created,
         skipped,
         conflict_count: conflicts.length,
       },
@@ -2212,5 +2677,5 @@ export async function importProductionUsageUpdates(input: {
 
   revalidateUsageEditorPaths()
 
-  return { success: true, data: { updated, skipped, conflicts } }
+  return { success: true, data: { updated, created, skipped, conflicts } }
 }

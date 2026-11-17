@@ -166,7 +166,8 @@ export function UsageSettingsForm({
                 </span>
                 <span className="block text-[0.625rem] text-muted-foreground">
                   By default the same SKU cannot be submitted twice for the same
-                  stage and usage date.
+                  stage and usage date while an active usage exists. Cancelled
+                  usage does not block a new submission.
                 </span>
               </span>
               <Switch
