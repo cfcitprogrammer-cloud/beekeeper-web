@@ -354,6 +354,11 @@ export const navSections: NavSection[] = [
             href: "/inventory/uoms",
             permission: PERMISSIONS.INVENTORY_VIEW,
           },
+          {
+            title: "Warehouses",
+            href: "/inventory/warehouses",
+            permission: PERMISSIONS.INVENTORY_VIEW,
+          },
         ],
       },
       {
@@ -423,6 +428,12 @@ export const navSections: NavSection[] = [
         title: "Workspaces",
         href: "/workspaces",
         icon: Building2,
+        superAdminOnly: true,
+      },
+      {
+        title: "Workspace access",
+        href: "/workspaces/access",
+        icon: ShieldCheck,
         superAdminOnly: true,
       },
       {

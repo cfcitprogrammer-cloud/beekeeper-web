@@ -470,6 +470,22 @@ export interface InventoryUom {
   updated_at: ISODateTime
 }
 
+export interface InventoryWarehouse {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID | null
+  code: string
+  name: string
+  address: string | null
+  contact_person: string | null
+  phone: string | null
+  email: string | null
+  notes: string | null
+  is_active: boolean
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
 export interface Sku {
   id: UUID
   company_id: UUID
@@ -485,6 +501,7 @@ export interface Sku {
   unit_price: number
   tax_rate: number
   photo_path: string | null
+  production_warehouse_id: UUID | null
   is_active: boolean
   created_at: ISODateTime
   updated_at: ISODateTime
@@ -1068,6 +1085,7 @@ export type ApprovalTemplateWithConfig = ApprovalTemplate & {
 
 export type SkuWithCategory = Sku & {
   category: Pick<SkuCategory, "id" | "name"> | null
+  production_warehouse: Pick<InventoryWarehouse, "id" | "code" | "name"> | null
   component_count?: number
 }
 

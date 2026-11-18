@@ -19,6 +19,8 @@ export type CreateSkuInput = {
   /** Unit code. Prefer `uomId` so the master record is the source of truth. */
   uom?: string
   uomId?: string
+  /** Optional label pointing at the item's production warehouse. */
+  productionWarehouseId?: string
   unitPrice: number
   taxRate: number
   isActive: boolean
@@ -69,6 +71,46 @@ async function resolveUom(
   return { ok: true, uom: code, uomId: data?.id ?? null }
 }
 
+/**
+ * Validate the optional production warehouse label. The warehouse must belong
+ * to the company and be visible in the active workspace.
+ */
+async function resolveProductionWarehouse(
+  supabase: AuthorizedActionContext["supabase"],
+  companyId: string,
+  workspaceId: string | null,
+  warehouseId: string | undefined
+): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
+  if (!warehouseId) return { ok: true, id: null }
+
+  const { data, error } = await supabase
+    .from("inventory_warehouses")
+    .select("id, workspace_id")
+    .eq("id", warehouseId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[action:resolveProductionWarehouse]", error)
+    return { ok: false, error: error.message }
+  }
+  if (!data) {
+    return { ok: false, error: "Select a valid production warehouse." }
+  }
+  if (
+    data.workspace_id !== null &&
+    workspaceId !== null &&
+    data.workspace_id !== workspaceId
+  ) {
+    return {
+      ok: false,
+      error: "That warehouse belongs to another workspace.",
+    }
+  }
+
+  return { ok: true, id: data.id }
+}
+
 export async function updateSku(
   input: UpdateSkuInput
 ): Promise<ActionResult<{ id: string }>> {
@@ -80,10 +122,18 @@ export async function updateSku(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
   const uomResult = await resolveUom(supabase, companyId, input)
   if (!uomResult.ok) return failure(uomResult.error)
+
+  const warehouseResult = await resolveProductionWarehouse(
+    supabase,
+    companyId,
+    workspaceId,
+    input.productionWarehouseId
+  )
+  if (!warehouseResult.ok) return failure(warehouseResult.error)
 
   const { data, error } = await supabase
     .from("skus")
@@ -95,6 +145,7 @@ export async function updateSku(
       brand: input.brand?.trim() || null,
       uom: uomResult.uom,
       uom_id: uomResult.uomId,
+      production_warehouse_id: warehouseResult.id,
       unit_price: input.unitPrice,
       tax_rate: input.taxRate,
       is_active: input.isActive,
@@ -153,6 +204,14 @@ export async function createSku(
   const uomResult = await resolveUom(supabase, companyId, input)
   if (!uomResult.ok) return failure(uomResult.error)
 
+  const warehouseResult = await resolveProductionWarehouse(
+    supabase,
+    companyId,
+    workspaceId,
+    input.productionWarehouseId
+  )
+  if (!warehouseResult.ok) return failure(warehouseResult.error)
+
   const { data, error } = await supabase
     .from("skus")
     .insert({
@@ -165,6 +224,7 @@ export async function createSku(
       brand: input.brand?.trim() || null,
       uom: uomResult.uom,
       uom_id: uomResult.uomId,
+      production_warehouse_id: warehouseResult.id,
       unit_price: input.unitPrice,
       tax_rate: input.taxRate,
       is_active: input.isActive,

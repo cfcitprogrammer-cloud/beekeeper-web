@@ -219,6 +219,30 @@ export async function setActiveWorkspace(
     return failure("Workspace not found in this company.")
   }
 
+  // Non-Super-Admins can only activate a workspace they are assigned to. Users
+  // without any explicit assignment keep the legacy behaviour of seeing every
+  // workspace.
+  if (!isSuperAdminRole(context.roleName)) {
+    const { data: assignments, error: assignmentError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("company_id", context.companyId)
+      .eq("user_id", context.userId)
+
+    if (assignmentError) {
+      console.error("[action:setActiveWorkspace:access]", assignmentError)
+      return failure(assignmentError.message)
+    }
+
+    const assignedIds = new Set(
+      (assignments ?? []).map((row) => String(row.workspace_id))
+    )
+
+    if (assignedIds.size > 0 && !assignedIds.has(workspaceId)) {
+      return failure("You do not have access to this workspace.")
+    }
+  }
+
   const cookieStore = await cookies()
   cookieStore.set("active_workspace_id", workspaceId, {
     path: "/",
@@ -229,4 +253,132 @@ export async function setActiveWorkspace(
 
   revalidatePath("/", "layout")
   return { success: true, data: { id: workspaceId } }
+}
+
+/**
+ * Replace the set of workspaces a company member can see and switch to.
+ *
+ * Rows are stored in `workspace_members`, reusing the member's company role so
+ * the assignment does not change their permissions. An empty set means "no
+ * explicit restriction" — those users continue to see every company workspace.
+ */
+export async function setWorkspaceVisibility(input: {
+  userId: string
+  workspaceIds: string[]
+}): Promise<ActionResult<{ userId: string }>> {
+  if (!input.userId) return failure("User id is required.")
+
+  const context = await getActionContext()
+  if (!context.userId || !context.companyId) {
+    return failure(
+      "You must be signed in with a company to change workspace access."
+    )
+  }
+  if (!isSuperAdminRole(context.roleName)) {
+    return failure("Only Super Admin users can change workspace access.")
+  }
+  if (input.userId === context.userId) {
+    return failure(
+      "Your own workspace access is managed by your Super Admin role."
+    )
+  }
+
+  const workspaceIds = Array.from(
+    new Set((input.workspaceIds ?? []).filter(Boolean))
+  )
+
+  const supabase = await createClient()
+
+  // The member needs a company role because `workspace_members.role_id` is
+  // required and is reused for every assignment.
+  const { data: membership, error: membershipError } = await supabase
+    .from("company_members")
+    .select("role_id")
+    .eq("company_id", context.companyId)
+    .eq("user_id", input.userId)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[action:setWorkspaceVisibility:membership]", membershipError)
+    return failure(membershipError.message)
+  }
+  if (!membership) {
+    return failure(
+      "Give this user a company role before assigning workspace access."
+    )
+  }
+
+  const { data: companyWorkspaces, error: workspaceError } =
+    workspaceIds.length > 0
+      ? await supabase
+          .from("workspaces")
+          .select("id")
+          .eq("company_id", context.companyId)
+          .in("id", workspaceIds)
+      : { data: [] as { id: string }[], error: null }
+
+  if (workspaceError) {
+    console.error("[action:setWorkspaceVisibility:workspaces]", workspaceError)
+    return failure(workspaceError.message)
+  }
+
+  const validIds = new Set(
+    (companyWorkspaces ?? []).map((row) => String(row.id))
+  )
+  if (validIds.size !== workspaceIds.length) {
+    return failure("One or more workspaces do not belong to this company.")
+  }
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("company_id", context.companyId)
+    .eq("user_id", input.userId)
+
+  if (existingError) {
+    console.error("[action:setWorkspaceVisibility:existing]", existingError)
+    return failure(existingError.message)
+  }
+
+  const existingIds = new Set(
+    (existingRows ?? []).map((row) => String(row.workspace_id))
+  )
+  const toInsert = workspaceIds.filter((id) => !existingIds.has(id))
+  const toRemove = Array.from(existingIds).filter(
+    (id) => !validIds.has(id)
+  )
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("workspace_members").insert(
+      toInsert.map((workspaceId) => ({
+        workspace_id: workspaceId,
+        user_id: input.userId,
+        company_id: context.companyId,
+        role_id: membership.role_id,
+      }))
+    )
+
+    if (error) {
+      console.error("[action:setWorkspaceVisibility:insert]", error)
+      return failure(error.message)
+    }
+  }
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("workspace_members")
+      .delete()
+      .eq("company_id", context.companyId)
+      .eq("user_id", input.userId)
+      .in("workspace_id", toRemove)
+
+    if (error) {
+      console.error("[action:setWorkspaceVisibility:remove]", error)
+      return failure(error.message)
+    }
+  }
+
+  revalidatePath("/workspaces/access")
+  revalidatePath("/", "layout")
+  return { success: true, data: { userId: input.userId } }
 }

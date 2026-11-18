@@ -6,15 +6,26 @@ All notable changes to this project are documented here. Entries are grouped by 
 
 ### Workspace switching
 - Workspace switcher in the app shell is now functional instead of cosmetic.
+- Switching workspaces shows a full-page “Changing workspace…” overlay with the target workspace name until the app reloads with the new data.
+- If the switch fails, the overlay closes, the previous workspace is restored, and an error toast explains why.
 - Active workspace is persisted in an `active_workspace_id` cookie (1-year lifetime) and honored by `getAccessContext`.
-- Switching workspaces triggers a full reload so all server data refreshes.
 - Active workspace is restored on page refresh (no longer resets to the first workspace).
+- Non-Super-Admin users can only activate workspaces they are assigned to (or their employee workspace); the server action rejects anything else.
 - Production pipelines, stages, usage, expenses, visits, outlets, bookings, attendance, leave requests, employee schedules, approval templates, and master data (SKUs, SKU categories, inventory UOMs, departments, positions, shifts, leave types, expense categories, production stages/stage-SKUs, production usage settings) are now scoped by the active workspace. Company-wide rows (`workspace_id IS NULL`) remain visible in every workspace.
 - Reads and create actions tag new records with the active workspace where applicable.
+
+### Workspace visibility (`/workspaces/access`)
+- New Super Admin module for assigning which workspaces each user can see and switch to.
+- Users are listed with their company role and workspace chips; clicking a chip grants or revokes access immediately.
+- Super Admins always have full access and are shown read-only.
+- An empty selection means “all workspaces” (legacy default); use “All workspaces” to reset.
+- The switcher and `setActiveWorkspace` now enforce the assignment, and the sidebar only lists workspaces the signed-in user may open.
 
 ### Production usage lifecycle
 - Replaced hard deletes with a lifecycle `status`: `submitted`, `completed` (derived once the cutoff passes), `cancelled`.
 - Usage editor (`/production/usage-editor`) gained a critical-module warning banner, status badges/column, cancel/restore actions (with BOM cascade), bulk cancel/restore, and a per-line changelog history dialog.
+- The editor table is paginated (10 / 25 / 50 / 100 rows per page) with range and page controls, and the SKU filter is a free-text SKU-code search instead of a SKU dropdown.
+- The production audit report now uses the same free-text SKU-code filter (case-insensitive partial match) instead of a SKU dropdown.
 - Submitted usage can be edited by its submitter before the cutoff when `allow_submitter_edit` is enabled (quantities, date, notes, or marking as cancellation).
 - Duplicate submissions for the same stage + SKU + usage date are blocked unless `allow_duplicates` is enabled; cancelled usage no longer blocks a new submission.
 - Import now updates existing lines **and** adds non-existent lines, subject to the configured rules, and writes `import` changelog entries. Import conflicts offer "Mark cancellation" instead of delete.
@@ -37,6 +48,20 @@ All notable changes to this project are documented here. Entries are grouped by 
 - Full-page loading overlay on navigational link clicks (`NavigationLoader`).
 - Dashboard gained recharts graphs (booking pipeline bar chart, outlet coverage pie chart).
 - Toast system supports `type: "loading"` for long-running actions.
+
+### Inventory warehouses
+- New `/inventory/warehouses` module for managing warehouse master data (code, name, address, contact details, notes, status). Warehouses are workspace-scoped and use the existing inventory permissions.
+- Added an optional **Production warehouse** field to SKUs. It is a simple label that records which production warehouse an item belongs to and does not affect stock, availability or bookings.
+- SKU detail and catalog show the assigned production warehouse, and the SKU form links straight to warehouse management.
+- Catalog CSV import/export now includes a `production_warehouse` column; imports match by warehouse code or name and require the warehouse to exist first.
+- Migration: `20261123_inventory_warehouses.sql`.
+
+### SKU catalog mass import & export
+- The SKU catalog toolbar now has an **Import** menu with two mass-import flows: **SKU catalog** and **BOM & components**.
+- SKU catalog import matches rows by `sku_code`; blank cells preserve existing values, new SKUs default to price/tax `0`, active, and `PCS`. Category names resolve automatically and missing categories are created.
+- BOM import matches rows by `parent_sku_code` + `component_sku_code`, updates quantities, rejects self-references and non-positive quantities, and reports unknown or cross-workspace SKUs.
+- Both imports accept a downloadable CSV template, show created/updated/error counts, and list row-level errors without aborting the rest of the file.
+- Added **Export** for both datasets as CSV, Excel (`.xlsx`), and PDF. The catalog export follows the current table filters; the BOM export covers the active workspace plus company-wide SKUs.
 
 ### Permission & schema
 - Added `production.editor` permission with migration and route/sidebar/search wiring.

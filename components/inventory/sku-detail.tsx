@@ -62,6 +62,14 @@ export function SkuDetail({
           <Field label="Brand" value={sku.brand} />
           <Field label="Barcode" value={sku.barcode} />
           <Field label="Unit of measure" value={uomLabel ?? sku.uom} />
+          <Field
+            label="Production warehouse"
+            value={
+              sku.production_warehouse
+                ? `${sku.production_warehouse.name} (${sku.production_warehouse.code})`
+                : null
+            }
+          />
           <Field label="Selling price" value={formatCurrency(sku.unit_price)} />
           <Field label="Tax rate" value={`${sku.tax_rate}%`} />
           <Field

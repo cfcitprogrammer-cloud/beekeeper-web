@@ -160,6 +160,7 @@ declare
     'outlets',
     'sku_categories',
     'inventory_uoms',
+    'inventory_warehouses',
     'skus',
     'bookings',
     'booking_lines',

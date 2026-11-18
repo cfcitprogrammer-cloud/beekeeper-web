@@ -49,7 +49,6 @@ import {
   type AuditExportRow,
 } from "@/lib/production/audit-export"
 import type {
-  ProductionSkuSummary,
   ProductionStageWithRelations,
   ProductionUsageWithRelations,
 } from "@/lib/data/operations"
@@ -59,13 +58,6 @@ type PipelineOption = Pick<
   ProductionPipeline,
   "id" | "name" | "code" | "is_active"
 >
-
-function addSku(
-  map: Map<string, ProductionSkuSummary>,
-  sku: ProductionSkuSummary | null
-) {
-  if (sku) map.set(sku.id, sku)
-}
 
 export function ProductionAuditReport({
   pipelines,
@@ -86,7 +78,7 @@ export function ProductionAuditReport({
 }) {
   const [pipelineId, setPipelineId] = React.useState("")
   const [stageId, setStageId] = React.useState("")
-  const [skuId, setSkuId] = React.useState("")
+  const [skuQuery, setSkuQuery] = React.useState("")
   const [fromDate, setFromDate] = React.useState("")
   const [toDate, setToDate] = React.useState("")
   const [exporting, setExporting] = React.useState<
@@ -104,40 +96,17 @@ export function ProductionAuditReport({
     )
   }, [stages, pipelineId])
 
-  const skuOptions = React.useMemo(() => {
-    const skus = new Map<string, ProductionSkuSummary>()
-    const relevantStages = stageId
-      ? stages.filter((stage) => stage.id === stageId)
-      : pipelineId
-        ? stages.filter((stage) => stage.pipeline_id === pipelineId)
-        : stages
-
-    for (const stage of relevantStages) {
-      for (const sku of stage.skus) addSku(skus, sku)
-    }
-
-    // Include SKUs that appear in recorded usage even if they are no longer
-    // assigned to the stage, so historical audits stay complete.
-    for (const line of usage) {
-      if (stageId && line.stage_id !== stageId) continue
-      if (!stageId && pipelineId && line.pipeline_id !== pipelineId) continue
-      addSku(skus, line.sku)
-    }
-
-    return Array.from(skus.values()).sort((a, b) =>
-      `${a.name} ${a.sku_code}`.localeCompare(`${b.name} ${b.sku_code}`)
-    )
-  }, [stages, usage, pipelineId, stageId])
-
   const filtered = React.useMemo(() => {
+    const skuNeedle = skuQuery.trim().toLowerCase()
     return usage
       .filter((line) => {
         if (line.status === "cancelled") return false
         const usageDate = line.usage_date.slice(0, 10)
+        const skuCode = (line.sku?.sku_code ?? "").toLowerCase()
         return (
           (!pipelineId || line.pipeline_id === pipelineId) &&
           (!stageId || line.stage_id === stageId) &&
-          (!skuId || line.sku_id === skuId) &&
+          (!skuNeedle || skuCode.includes(skuNeedle)) &&
           (!fromDate || usageDate >= fromDate) &&
           (!toDate || usageDate <= toDate)
         )
@@ -147,7 +116,7 @@ export function ProductionAuditReport({
           b.usage_date.localeCompare(a.usage_date) ||
           b.recorded_at.localeCompare(a.recorded_at)
       )
-  }, [usage, pipelineId, stageId, skuId, fromDate, toDate])
+  }, [usage, pipelineId, stageId, skuQuery, fromDate, toDate])
 
   const batchCount = new Set(
     filtered.map((line) => line.batch_id || line.id)
@@ -159,25 +128,23 @@ export function ProductionAuditReport({
   ).size
   const stageCount = new Set(filtered.map((line) => line.stage_id)).size
   const hasFilters = Boolean(
-    pipelineId || stageId || skuId || fromDate || toDate
+    pipelineId || stageId || skuQuery.trim() || fromDate || toDate
   )
   const invalidDateRange = Boolean(fromDate && toDate && fromDate > toDate)
 
   function changePipeline(value: string) {
     setPipelineId(value)
     setStageId("")
-    setSkuId("")
   }
 
   function changeStage(value: string) {
     setStageId(value)
-    setSkuId("")
   }
 
   function clearFilters() {
     setPipelineId("")
     setStageId("")
-    setSkuId("")
+    setSkuQuery("")
     setFromDate("")
     setToDate("")
   }
@@ -209,7 +176,6 @@ export function ProductionAuditReport({
   function buildExportMeta(): AuditExportMeta {
     const pipeline = pipelines.find((item) => item.id === pipelineId)
     const stage = stages.find((item) => item.id === stageId)
-    const sku = skuOptions.find((item) => item.id === skuId)
 
     return {
       companyName,
@@ -224,7 +190,9 @@ export function ProductionAuditReport({
               stage.sequence
             }. ${stage.name}`
           : "",
-        sku: sku ? `${sku.sku_code} · ${sku.name}` : "",
+        sku: skuQuery.trim()
+          ? `SKU code contains “${skuQuery.trim()}”`
+          : "",
         fromDate,
         toDate,
       },
@@ -421,7 +389,7 @@ export function ProductionAuditReport({
             Report filters
           </CardTitle>
           <CardDescription>
-            Choose a pipeline, stage, SKU or date range to narrow the audit
+            Choose a pipeline, stage, SKU code or date range to narrow the audit
             table. Leave a filter on “All” to include everything.
           </CardDescription>
           <CardAction>
@@ -529,23 +497,16 @@ export function ProductionAuditReport({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="audit-sku">SKU</Label>
-              <NativeSelect
+              <Label htmlFor="audit-sku">SKU code</Label>
+              <Input
                 id="audit-sku"
-                value={skuId}
-                onChange={(event) => setSkuId(event.target.value)}
+                type="text"
+                value={skuQuery}
+                onChange={(event) => setSkuQuery(event.target.value)}
+                placeholder="Filter by SKU code…"
+                autoComplete="off"
                 className="w-full"
-                disabled={skuOptions.length === 0}
-              >
-                <NativeSelectOption value="">
-                  {skuOptions.length === 0 ? "No SKUs available" : "All SKUs"}
-                </NativeSelectOption>
-                {skuOptions.map((sku) => (
-                  <NativeSelectOption key={sku.id} value={sku.id}>
-                    {sku.sku_code} · {sku.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -625,7 +586,7 @@ export function ProductionAuditReport({
         searchPlaceholder="Search the audit result…"
         pageSize={15}
         emptyTitle="No usage matches these filters"
-        emptyDescription="Try a different pipeline, stage, SKU or date range, or clear the filters to see all recorded usage."
+        emptyDescription="Try a different pipeline, stage, SKU code or date range, or clear the filters to see all recorded usage."
         emptyIcon={ClipboardList}
         initialSort={{ id: "date", desc: true }}
       />

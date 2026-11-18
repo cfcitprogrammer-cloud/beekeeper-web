@@ -100,6 +100,45 @@ function activeLocations(company: CompanyBundle | null): WorkspaceLocation[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
+/**
+ * Workspaces the signed-in user is allowed to see and switch to.
+ *
+ * Super Admins always see every active workspace. Everyone else is limited to
+ * their explicit `workspace_members` assignments. Users without any explicit
+ * assignment keep the historical behaviour of seeing every workspace so
+ * existing accounts are not locked out.
+ */
+function visibleWorkspaces(
+  company: CompanyBundle | null,
+  options: {
+    fullAccess: boolean
+    assignedWorkspaceIds: Set<string>
+    homeWorkspaceId: string | null
+  }
+): Workspace[] {
+  const workspaces = activeWorkspaces(company)
+
+  if (options.fullAccess || options.assignedWorkspaceIds.size === 0) {
+    return workspaces
+  }
+
+  const visible = workspaces.filter((workspace) =>
+    options.assignedWorkspaceIds.has(workspace.id)
+  )
+
+  if (visible.length > 0) {
+    return visible
+  }
+
+  // Assignment points at an inactive workspace: fall back to the home
+  // workspace when possible, otherwise the first active workspace, so the
+  // user is never left without a workspace context.
+  const home = workspaces.find(
+    (workspace) => workspace.id === options.homeWorkspaceId
+  )
+  return home ? [home] : workspaces.slice(0, 1)
+}
+
 function grantedPermissions(roles: RoleWithPermissions[]): string[] {
   return Array.from(
     new Set(
@@ -191,16 +230,6 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
     workspaceMembers[0]?.company_id ??
     null
   const embeddedCompany = companyMember?.company ?? null
-  const availableWorkspaceIds = new Set(
-    (embeddedCompany?.workspaces ?? []).map((workspace) => workspace.id)
-  )
-  const workspaceId =
-    cookieWorkspaceId && availableWorkspaceIds.has(cookieWorkspaceId)
-      ? cookieWorkspaceId
-      : employee?.workspace_id ??
-        workspaceMembers.find((member) => member.company_id === companyId)
-          ?.workspace_id ??
-        null
 
   const email = employee?.email ?? claims?.email ?? ""
   const metadataName =
@@ -222,7 +251,10 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
       },
       employee,
       companyId: null,
-      workspaceId,
+      workspaceId:
+        employee?.workspace_id ??
+        workspaceMembers[0]?.workspace_id ??
+        null,
       company: null,
       workspaces: [],
       locations: [],
@@ -286,6 +318,28 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
   const primaryRole =
     roles.find((role) => role.id === companyMember?.role_id) ?? roles[0]
 
+  const workspaces = visibleWorkspaces(company, {
+    fullAccess: roles.some((role) => role.name === "Super Admin"),
+    assignedWorkspaceIds: new Set(
+      companyWorkspaceMembers.map((member) => member.workspace_id)
+    ),
+    homeWorkspaceId: employee?.workspace_id ?? null,
+  })
+  const availableWorkspaceIds = new Set(
+    workspaces.map((workspace) => workspace.id)
+  )
+  const workspaceId =
+    cookieWorkspaceId && availableWorkspaceIds.has(cookieWorkspaceId)
+      ? cookieWorkspaceId
+      : employee?.workspace_id &&
+          availableWorkspaceIds.has(employee.workspace_id)
+        ? employee.workspace_id
+        : companyWorkspaceMembers.find((member) =>
+              availableWorkspaceIds.has(member.workspace_id)
+            )?.workspace_id ??
+          workspaces[0]?.id ??
+          null
+
   console.log("[tmp-access] done in", Math.round(performance.now() - tmpStart), "ms")
   return {
     supabase,
@@ -302,7 +356,7 @@ export const getAccessContext = cache(async (): Promise<AccessContext> => {
     companyId,
     workspaceId,
     company,
-    workspaces: activeWorkspaces(company),
+    workspaces,
     locations: activeLocations(company),
     permissions,
   }

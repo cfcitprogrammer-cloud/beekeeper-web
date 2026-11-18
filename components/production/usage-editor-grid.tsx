@@ -6,6 +6,8 @@ import {
   AlertTriangle,
   Ban,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Download,
   FileSpreadsheet,
@@ -134,10 +136,12 @@ export function ProductionUsageEditorGrid({
 
   const [pipelineId, setPipelineId] = React.useState("")
   const [stageId, setStageId] = React.useState("")
-  const [skuId, setSkuId] = React.useState("")
+  const [skuQuery, setSkuQuery] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("")
   const [fromDate, setFromDate] = React.useState("")
   const [toDate, setToDate] = React.useState("")
+  const [pageIndex, setPageIndex] = React.useState(0)
+  const [pageSize, setPageSize] = React.useState(25)
   const [drafts, setDrafts] = React.useState<Record<string, DraftState>>({})
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [saving, setSaving] = React.useState(false)
@@ -205,37 +209,20 @@ export function ProductionUsageEditorGrid({
     )
   }, [stages, pipelineId])
 
-  const skuOptions = React.useMemo(() => {
-    const skus = new Map<string, ProductionSkuSummary>()
-    const relevantStages = stageId
-      ? stages.filter((stage) => stage.id === stageId)
-      : pipelineId
-        ? stages.filter((stage) => stage.pipeline_id === pipelineId)
-        : stages
-
-    for (const stage of relevantStages) {
-      for (const sku of stage.skus) skus.set(sku.id, sku)
-    }
-
-    for (const line of usage) {
-      if (stageId && line.stage_id !== stageId) continue
-      if (!stageId && pipelineId && line.pipeline_id !== pipelineId) continue
-      if (line.sku) skus.set(line.sku.id, line.sku)
-    }
-
-    return Array.from(skus.values()).sort((a, b) =>
-      `${a.name} ${a.sku_code}`.localeCompare(`${b.name} ${b.sku_code}`)
-    )
-  }, [stages, usage, pipelineId, stageId])
-
   const filtered = React.useMemo(() => {
+    const skuNeedle = skuQuery.trim().toLowerCase()
     return usage
       .filter((line) => {
         const usageDate = line.usage_date.slice(0, 10)
+        const skuCode = (
+          line.sku?.sku_code ??
+          (line.sku_id ? skuIndex.get(line.sku_id)?.sku_code : "") ??
+          ""
+        ).toLowerCase()
         return (
           (!pipelineId || line.pipeline_id === pipelineId) &&
           (!stageId || line.stage_id === stageId) &&
-          (!skuId || line.sku_id === skuId) &&
+          (!skuNeedle || skuCode.includes(skuNeedle)) &&
           (!statusFilter || statusOf(line) === statusFilter) &&
           (!fromDate || usageDate >= fromDate) &&
           (!toDate || usageDate <= toDate)
@@ -246,16 +233,36 @@ export function ProductionUsageEditorGrid({
           b.usage_date.localeCompare(a.usage_date) ||
           b.recorded_at.localeCompare(a.recorded_at)
       )
-  }, [usage, pipelineId, stageId, skuId, statusFilter, fromDate, toDate, statusOf])
+  }, [
+    usage,
+    pipelineId,
+    stageId,
+    skuQuery,
+    skuIndex,
+    statusFilter,
+    fromDate,
+    toDate,
+    statusOf,
+  ])
 
   const hasFilters = Boolean(
-    pipelineId || stageId || skuId || statusFilter || fromDate || toDate
+    pipelineId || stageId || skuQuery.trim() || statusFilter || fromDate || toDate
   )
   const invalidDateRange = Boolean(fromDate && toDate && fromDate > toDate)
   const dirtyRows = Object.keys(drafts)
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePageIndex = Math.min(pageIndex, pageCount - 1)
+  const pageStart = safePageIndex * pageSize
+  const pageEnd = Math.min(pageStart + pageSize, filtered.length)
+  const pagedRows = React.useMemo(
+    () => filtered.slice(pageStart, pageStart + pageSize),
+    [filtered, pageStart, pageSize]
+  )
+
   const allVisibleSelected =
-    filtered.length > 0 && filtered.every((row) => selected.has(row.id))
-  const someVisibleSelected = filtered.some((row) => selected.has(row.id))
+    pagedRows.length > 0 && pagedRows.every((row) => selected.has(row.id))
+  const someVisibleSelected = pagedRows.some((row) => selected.has(row.id))
 
   const batchCount = new Set(
     filtered.map((line) => line.batch_id || line.id)
@@ -296,21 +303,22 @@ export function ProductionUsageEditorGrid({
   function changePipeline(value: string) {
     setPipelineId(value)
     setStageId("")
-    setSkuId("")
+    setPageIndex(0)
   }
 
   function changeStage(value: string) {
     setStageId(value)
-    setSkuId("")
+    setPageIndex(0)
   }
 
   function clearFilters() {
     setPipelineId("")
     setStageId("")
-    setSkuId("")
+    setSkuQuery("")
     setStatusFilter("")
     setFromDate("")
     setToDate("")
+    setPageIndex(0)
   }
 
   function setField(
@@ -344,9 +352,9 @@ export function ProductionUsageEditorGrid({
     setSelected((current) => {
       const next = new Set(current)
       if (allVisibleSelected) {
-        filtered.forEach((row) => next.delete(row.id))
+        pagedRows.forEach((row) => next.delete(row.id))
       } else {
-        filtered.forEach((row) => next.add(row.id))
+        pagedRows.forEach((row) => next.add(row.id))
       }
       return next
     })
@@ -771,7 +779,7 @@ export function ProductionUsageEditorGrid({
             Editor filters
           </CardTitle>
           <CardDescription>
-            Narrow the sheet by pipeline, stage, SKU, status or date. Leave a
+            Narrow the sheet by pipeline, stage, SKU code, status or date. Leave a
             filter on “All” to include every usage line.
           </CardDescription>
         </CardHeader>
@@ -819,23 +827,18 @@ export function ProductionUsageEditorGrid({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="editor-sku">SKU</Label>
-              <NativeSelect
+              <Label htmlFor="editor-sku">SKU code</Label>
+              <Input
                 id="editor-sku"
-                value={skuId}
-                onChange={(event) => setSkuId(event.target.value)}
-                className="w-full"
-                disabled={skuOptions.length === 0}
-              >
-                <NativeSelectOption value="">
-                  {skuOptions.length === 0 ? "No SKUs available" : "All SKUs"}
-                </NativeSelectOption>
-                {skuOptions.map((sku) => (
-                  <NativeSelectOption key={sku.id} value={sku.id}>
-                    {sku.sku_code} · {sku.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                type="text"
+                value={skuQuery}
+                onChange={(event) => {
+                  setSkuQuery(event.target.value)
+                  setPageIndex(0)
+                }}
+                placeholder="Filter by SKU code…"
+                autoComplete="off"
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -843,9 +846,10 @@ export function ProductionUsageEditorGrid({
               <NativeSelect
                 id="editor-status"
                 value={statusFilter}
-                onChange={(event) =>
+                onChange={(event) => {
                   setStatusFilter(event.target.value as StatusFilter)
-                }
+                  setPageIndex(0)
+                }}
                 className="w-full"
               >
                 <NativeSelectOption value="">All statuses</NativeSelectOption>
@@ -862,7 +866,10 @@ export function ProductionUsageEditorGrid({
                 type="date"
                 value={fromDate}
                 max={toDate || undefined}
-                onChange={(event) => setFromDate(event.target.value)}
+                onChange={(event) => {
+                  setFromDate(event.target.value)
+                  setPageIndex(0)
+                }}
                 aria-invalid={invalidDateRange}
               />
             </div>
@@ -874,7 +881,10 @@ export function ProductionUsageEditorGrid({
                 type="date"
                 value={toDate}
                 min={fromDate || undefined}
-                onChange={(event) => setToDate(event.target.value)}
+                onChange={(event) => {
+                  setToDate(event.target.value)
+                  setPageIndex(0)
+                }}
                 aria-invalid={invalidDateRange}
               />
             </div>
@@ -1034,7 +1044,7 @@ export function ProductionUsageEditorGrid({
                       }
                     }}
                     onChange={toggleAll}
-                    aria-label="Select every visible usage line"
+                    aria-label="Select every usage line on this page"
                   />
                 </th>
                 <th className="w-24 border-r px-2 py-2 text-left font-medium">
@@ -1071,7 +1081,7 @@ export function ProductionUsageEditorGrid({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row, index) => {
+              {pagedRows.map((row, index) => {
                 const status = statusOf(row)
                 const cancelled = status === "cancelled"
                 const draft = drafts[row.id]
@@ -1095,7 +1105,7 @@ export function ProductionUsageEditorGrid({
                     )}
                   >
                     <td className="border-r px-2 py-1.5 text-right font-mono text-[0.625rem] text-muted-foreground tabular-nums">
-                      {index + 1}
+                      {pageStart + index + 1}
                     </td>
                     <td className="border-r px-2 py-1.5 text-center">
                       <input
@@ -1103,7 +1113,7 @@ export function ProductionUsageEditorGrid({
                         className="size-3.5 accent-primary"
                         checked={checked}
                         onChange={() => toggleRow(row.id)}
-                        aria-label={`Select usage line ${index + 1}`}
+                        aria-label={`Select usage line ${pageStart + index + 1}`}
                       />
                     </td>
                     <td className="border-r px-2 py-1.5">
@@ -1252,8 +1262,8 @@ export function ProductionUsageEditorGrid({
               <FileSpreadsheet className="size-6 text-muted-foreground" />
               <p className="text-xs font-medium">No usage matches these filters</p>
               <p className="max-w-sm text-[0.625rem] text-muted-foreground">
-                Try a different pipeline, stage, SKU, status or date range, or
-                clear the filters to see all recorded usage.
+                Try a different pipeline, stage, SKU code, status or date range,
+                or clear the filters to see all recorded usage.
               </p>
             </div>
           ) : null}
@@ -1261,11 +1271,59 @@ export function ProductionUsageEditorGrid({
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[0.625rem] text-muted-foreground">
           <span>
-            {formatNumber(filtered.length)} line
-            {filtered.length === 1 ? "" : "s"} shown · edit the date, quantity or
-            notes cells directly. Cancelled lines are read-only.
+            {filtered.length === 0
+              ? "No lines to show."
+              : `Showing ${formatNumber(pageStart + 1)}–${formatNumber(
+                  pageEnd
+                )} of ${formatNumber(filtered.length)} line${
+                  filtered.length === 1 ? "" : "s"
+                }${hasFilters ? " after filters" : ""}`}
+            {" · "}edit the date, quantity or notes cells directly. Cancelled
+            lines are read-only.
           </span>
-          <span>Changes are saved together with “Save changes”.</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1">
+              Rows
+              <NativeSelect
+                value={String(pageSize)}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value))
+                  setPageIndex(0)
+                }}
+                className="h-6 w-16"
+                aria-label="Rows per page"
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <NativeSelectOption key={size} value={String(size)}>
+                    {size}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </label>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}
+              disabled={safePageIndex === 0}
+              aria-label="Previous page"
+            >
+              <ChevronLeft />
+            </Button>
+            <span className="tabular-nums">
+              Page {safePageIndex + 1} of {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() =>
+                setPageIndex(Math.min(pageCount - 1, safePageIndex + 1))
+              }
+              disabled={safePageIndex >= pageCount - 1}
+              aria-label="Next page"
+            >
+              <ChevronRight />
+            </Button>
+          </div>
         </div>
       </div>
 

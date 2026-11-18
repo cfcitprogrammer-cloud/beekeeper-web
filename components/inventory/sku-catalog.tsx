@@ -3,25 +3,29 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Download, Eye, Package, PackagePlus, Pencil, Trash2 } from "lucide-react"
+import { Eye, Package, PackagePlus, Pencil, Trash2 } from "lucide-react"
 
 import { deleteSku } from "@/actions/sku.action"
+import { SkuImportExport } from "@/components/inventory/sku-import-export"
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
 import { formatCurrency } from "@/lib/format"
+import type { SkuCatalogExportRow } from "@/lib/inventory/sku-export"
 import type { InventoryUom, SkuCategory, SkuWithCategory } from "@/types/database"
 
 export function SkuCatalog({
   skus,
   categories,
   uoms,
+  canImport,
 }: {
   skus: SkuWithCategory[]
   categories: SkuCategory[]
   uoms: InventoryUom[]
+  canImport: boolean
 }) {
   const router = useRouter()
   const [categoryId, setCategoryId] = React.useState("all")
@@ -53,6 +57,24 @@ export function SkuCatalog({
         return true
       }),
     [skus, categoryId, status, uomId, unitFor]
+  )
+
+  const exportRows: SkuCatalogExportRow[] = React.useMemo(
+    () =>
+      filtered.map((sku) => ({
+        skuCode: sku.sku_code,
+        name: sku.name,
+        category: sku.category?.name ?? "",
+        brand: sku.brand ?? "",
+        uom: unitFor(sku)?.code ?? sku.uom,
+        unitPrice: Number(sku.unit_price),
+        taxRate: Number(sku.tax_rate),
+        barcode: sku.barcode ?? "",
+        description: sku.description ?? "",
+        isActive: sku.is_active,
+        productionWarehouse: sku.production_warehouse?.code ?? "",
+      })),
+    [filtered, unitFor]
   )
 
   async function deleteSkuHandler(id: string, name: string) {
@@ -123,6 +145,25 @@ export function SkuCatalog({
           </div>
         )
       },
+    },
+    {
+      id: "warehouse",
+      header: "Prod. warehouse",
+      hideBelow: "xl",
+      sortValue: (row) => row.production_warehouse?.name ?? "",
+      cell: (row) =>
+        row.production_warehouse ? (
+          <div>
+            <p className="text-[0.625rem] text-foreground">
+              {row.production_warehouse.name}
+            </p>
+            <p className="font-mono text-[0.625rem] text-muted-foreground/70">
+              {row.production_warehouse.code}
+            </p>
+          </div>
+        ) : (
+          <span className="text-[0.625rem] text-muted-foreground">—</span>
+        ),
     },
     {
       id: "price",
@@ -207,6 +248,8 @@ export function SkuCatalog({
           row.brand,
           row.uom,
           unitFor(row)?.name,
+          row.production_warehouse?.name,
+          row.production_warehouse?.code,
         ]
           .filter(Boolean)
           .join(" ")
@@ -257,10 +300,7 @@ export function SkuCatalog({
       }
       toolbar={
         <>
-          <Button variant="outline" size="sm">
-            <Download />
-            Export
-          </Button>
+          <SkuImportExport canImport={canImport} catalogRows={exportRows} />
           <Button size="sm" render={<Link href="/inventory/skus/new" />}>
             <PackagePlus />
             Add SKU

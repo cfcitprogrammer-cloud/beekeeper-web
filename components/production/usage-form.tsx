@@ -323,15 +323,6 @@ export function UsageForm({
       </Button>
 
       <div className="rounded-lg border bg-card p-4 sm:p-6">
-        <div className="mb-4 flex items-start gap-2 rounded-md border bg-muted/30 p-3 text-[0.625rem] text-muted-foreground">
-          <UserRound className="mt-0.5 size-3.5" />
-          <p>
-            This usage entry is recorded against your signed-in account. Pick a
-            pipeline and stage, then add one or more SKUs assigned to that
-            stage. Each SKU uses its own unit of measure.
-          </p>
-        </div>
-
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="usage-pipeline">Pipeline</Label>
@@ -406,7 +397,7 @@ export function UsageForm({
                   key={line.key}
                   className={
                     opts.component
-                      ? "grid items-end gap-2 rounded-md border border-l-2 border-l-primary/40 border-primary/20 bg-primary/[0.03] p-2 pl-4 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
+                      ? "grid items-end gap-2 rounded-md border border-l-2 border-primary/20 border-l-primary/40 bg-primary/[0.03] p-2 pl-4 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
                       : "grid items-end gap-2 rounded-md border p-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
                   }
                 >
@@ -428,7 +419,9 @@ export function UsageForm({
                           ? stageSkus
                           : (() => {
                               const base =
-                                bomStageSkus.length > 0 ? bomStageSkus : stageSkus
+                                bomStageSkus.length > 0
+                                  ? bomStageSkus
+                                  : stageSkus
                               if (
                                 line.skuId &&
                                 !base.some((sku) => sku.id === line.skuId)
@@ -494,13 +487,18 @@ export function UsageForm({
 
             return (
               <div key={group.parent.key} className="space-y-1.5">
-                {renderLine(group.parent, { component: false, parentSku: null })}
+                {renderLine(group.parent, {
+                  component: false,
+                  parentSku: null,
+                })}
                 {group.children.length > 0 ? (
                   <div className="ml-3 overflow-hidden rounded-md border border-primary/20 bg-primary/[0.02]">
                     <table className="w-full border-collapse text-xs">
                       <thead>
                         <tr className="border-b bg-muted/40 text-[0.625rem] font-medium text-muted-foreground">
-                          <th className="px-2 py-1.5 text-left">Component SKU</th>
+                          <th className="px-2 py-1.5 text-left">
+                            Component SKU
+                          </th>
                           <th className="px-2 py-1.5 text-right">Quantity</th>
                           <th className="px-2 py-1.5 text-left">Unit</th>
                         </tr>

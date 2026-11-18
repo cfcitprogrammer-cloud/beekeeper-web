@@ -21,6 +21,7 @@ import type {
   LeaveRequestWithRelations,
   Holiday,
   InventoryUom,
+  InventoryWarehouse,
   LeaveType,
   MyPendingApproval,
   OutletWithRelations,
@@ -1249,6 +1250,39 @@ export async function getInventoryUom(
   return empty((data as InventoryUom | null) ?? null)
 }
 
+export async function getInventoryWarehouses(): Promise<
+  QueryResult<InventoryWarehouse[]>
+> {
+  const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  const query = supabase
+    .from("inventory_warehouses")
+    .select("*")
+    .order("name")
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
+
+  logError("inventory-warehouses", error)
+  return empty((data as InventoryWarehouse[] | null) ?? [])
+}
+
+export async function getInventoryWarehouse(
+  id: string
+): Promise<QueryResult<InventoryWarehouse | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("inventory_warehouses")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  logError("inventory-warehouse", error)
+  return empty((data as InventoryWarehouse | null) ?? null)
+}
+
 export async function getSkuCategories(): Promise<QueryResult<SkuCategory[]>> {
   const supabase = await createClient()
   const access = await getAccessContext()
@@ -1281,7 +1315,9 @@ export async function getSkus(): Promise<QueryResult<SkuWithCategory[]>> {
 
   const skusQuery = supabase
     .from("skus")
-    .select("*, category:sku_categories(id,name)")
+    .select(
+      "*, category:sku_categories(id,name), production_warehouse:inventory_warehouses!skus_production_warehouse_id_fkey(id,code,name)"
+    )
     .order("name")
   const [skusResult, componentsResult] = await Promise.all([
     workspaceId
@@ -1313,7 +1349,9 @@ export async function getSku(
   const [skuResult, componentsResult] = await Promise.all([
     supabase
       .from("skus")
-      .select("*, category:sku_categories(id,name)")
+      .select(
+        "*, category:sku_categories(id,name), production_warehouse:inventory_warehouses!skus_production_warehouse_id_fkey(id,code,name)"
+      )
       .eq("id", id)
       .maybeSingle(),
     supabase

@@ -8,6 +8,7 @@ import { SkuComponentsManager } from "@/components/inventory/sku-components-mana
 import { PageHeader } from "@/components/shared/page-header"
 import {
   getInventoryUoms,
+  getInventoryWarehouses,
   getSku,
   getSkuCategories,
   getSkuComponents,
@@ -22,10 +23,11 @@ export default async function EditSkuPage({
   const { id } = await params
   await requirePermission(PERMISSIONS.INVENTORY_UPDATE)
 
-  const [skuResult, categoriesResult, uomsResult, componentsResult, skusResult] = await Promise.all([
+  const [skuResult, categoriesResult, uomsResult, warehousesResult, componentsResult, skusResult] = await Promise.all([
     getSku(id),
     getSkuCategories(),
     getInventoryUoms(),
+    getInventoryWarehouses(),
     getSkuComponents(id),
     getSkus(),
   ])
@@ -43,6 +45,7 @@ export default async function EditSkuPage({
         sku={skuResult.data}
         categories={categoriesResult.data}
         uoms={uomsResult.data}
+        warehouses={warehousesResult.data}
       />
       <SkuComponentsManager
         parentId={id}

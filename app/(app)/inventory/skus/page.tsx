@@ -1,6 +1,6 @@
 import { Boxes, Package, PackageCheck, Tags } from "lucide-react"
 
-import { PERMISSIONS } from "@/lib/auth/permissions"
+import { PERMISSIONS, hasAnyPermission } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { SkuCatalog } from "@/components/inventory/sku-catalog"
 import { MetricCard } from "@/components/shared/metric-card"
@@ -9,7 +9,7 @@ import { getSkuCategories, getInventoryUoms, getSkus } from "@/lib/data/queries"
 import { formatCurrency } from "@/lib/format"
 
 export default async function SkuCatalogPage() {
-  const [, skusResult, categoriesResult, uomsResult] = await Promise.all([
+  const [access, skusResult, categoriesResult, uomsResult] = await Promise.all([
     requirePermission(PERMISSIONS.INVENTORY_VIEW),
     getSkus(),
     getSkuCategories(),
@@ -18,6 +18,10 @@ export default async function SkuCatalogPage() {
   const skus = skusResult.data
   const categories = categoriesResult.data
   const uoms = uomsResult.data
+  const canImport = hasAnyPermission(access.permissions, [
+    PERMISSIONS.INVENTORY_CREATE,
+    PERMISSIONS.INVENTORY_UPDATE,
+  ])
 
   const active = skus.filter((sku) => sku.is_active)
   const averagePrice = skus.length
@@ -64,7 +68,12 @@ export default async function SkuCatalogPage() {
         />
       </div>
 
-      <SkuCatalog skus={skus} categories={categories} uoms={uoms} />
+      <SkuCatalog
+        skus={skus}
+        categories={categories}
+        uoms={uoms}
+        canImport={canImport}
+      />
     </div>
   )
 }

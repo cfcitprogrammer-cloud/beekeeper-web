@@ -4,14 +4,15 @@ import { PERMISSIONS } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/guards"
 import { SkuForm } from "@/components/inventory/sku-form"
 import { PageHeader } from "@/components/shared/page-header"
-import { getSkuCategories, getInventoryUoms } from "@/lib/data/queries"
+import { getSkuCategories, getInventoryUoms, getInventoryWarehouses } from "@/lib/data/queries"
 
 export default async function NewSkuPage() {
   await requirePermission(PERMISSIONS.INVENTORY_CREATE)
 
-  const [categoriesResult, uomsResult] = await Promise.all([
+  const [categoriesResult, uomsResult, warehousesResult] = await Promise.all([
     getSkuCategories(),
     getInventoryUoms(),
+    getInventoryWarehouses(),
   ])
 
   return (
@@ -25,6 +26,7 @@ export default async function NewSkuPage() {
       <SkuForm
         categories={categoriesResult.data}
         uoms={uomsResult.data}
+        warehouses={warehousesResult.data}
       />
     </div>
   )

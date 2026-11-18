@@ -27,6 +27,7 @@ import {
   Tags,
   Users,
   Wallet,
+  Warehouse,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -75,6 +76,7 @@ const quickLinks = [
   { title: "Usage settings", href: "/production/usage-settings", icon: Settings2, group: "Field operations" },
   { title: "SKU catalog", href: "/inventory/skus", icon: Package, group: "Field operations" },
   { title: "SKU categories", href: "/inventory/categories", icon: Package, group: "Field operations" },
+  { title: "Warehouses", href: "/inventory/warehouses", icon: Warehouse, group: "Field operations" },
   { title: "Bookings register", href: "/bookings", icon: ShoppingCart, group: "Field operations" },
   { title: "Activity feed", href: "/feed", icon: Activity, group: "Overview" },
   { title: "Import & export", href: "/import-export", icon: ArrowLeftRight, group: "Data" },

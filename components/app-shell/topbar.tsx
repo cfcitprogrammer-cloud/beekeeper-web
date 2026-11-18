@@ -48,8 +48,10 @@ const segmentLabels: Record<string, string> = {
   balances: "Balances",
   outlets: "Outlets",
   workspaces: "Workspaces",
+  access: "Workspace access",
   inventory: "Inventory",
   skus: "SKU catalog",
+  warehouses: "Warehouses",
   bookings: "Bookings",
   approvals: "Approvals",
   inbox: "Inbox",
@@ -156,10 +158,10 @@ export function Topbar({
       </nav>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <span className="mr-1 hidden items-center gap-1.5 font-mono text-[0.5rem] tracking-[0.18em] text-muted-foreground uppercase xl:flex">
+        {/* <span className="mr-1 hidden items-center gap-1.5 font-mono text-[0.5rem] tracking-[0.18em] text-muted-foreground uppercase xl:flex">
           <span className="size-1.5 bg-primary" aria-hidden />
           hive online
-        </span>
+        </span> */}
         <div className="mr-1 hidden items-center gap-1.5 border border-border bg-card px-2 py-1 font-mono text-[0.5rem] tracking-[0.14em] text-muted-foreground uppercase xl:flex">
           <Building2 className="size-3" />
           <span className="max-w-40 truncate font-medium text-foreground">
@@ -305,7 +307,10 @@ export function Topbar({
                   My approvals
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem className="gap-2" render={<Link href="/account" />}>
+              <DropdownMenuItem
+                className="gap-2"
+                render={<Link href="/account" />}
+              >
                 <Settings2 className="size-3.5" />
                 Account settings
               </DropdownMenuItem>

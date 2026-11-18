@@ -13,6 +13,7 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
 import type {
   InventoryUom,
+  InventoryWarehouse,
   SkuCategory,
   SkuWithCategory,
 } from "@/types/database"
@@ -24,6 +25,7 @@ const emptyDraft = {
   brand: "",
   barcode: "",
   uom_id: "",
+  production_warehouse_id: "",
   unit_price: "0",
   tax_rate: "12",
   is_active: "true",
@@ -33,10 +35,12 @@ export function SkuForm({
   sku,
   categories,
   uoms,
+  warehouses,
 }: {
   sku?: SkuWithCategory | null
   categories: SkuCategory[]
   uoms: InventoryUom[]
+  warehouses: InventoryWarehouse[]
 }) {
   const router = useRouter()
   const editingId = sku?.id ?? null
@@ -53,6 +57,7 @@ export function SkuForm({
             sku.uom_id ??
             uoms.find((uom) => uom.code === sku.uom)?.id ??
             "",
+          production_warehouse_id: sku.production_warehouse_id ?? "",
           unit_price: String(sku.unit_price),
           tax_rate: String(sku.tax_rate),
           is_active: sku.is_active ? "true" : "false",
@@ -66,6 +71,15 @@ export function SkuForm({
     if (!selected || selected.is_active) return active
     return [...active, selected]
   }, [uoms, draft.uom_id])
+
+  const warehouseOptions = React.useMemo(() => {
+    const active = warehouses.filter((warehouse) => warehouse.is_active)
+    const selected = warehouses.find(
+      (warehouse) => warehouse.id === draft.production_warehouse_id
+    )
+    if (!selected || selected.is_active) return active
+    return [...active, selected]
+  }, [warehouses, draft.production_warehouse_id])
 
   async function saveSkuHandler() {
     if (!draft.name.trim() || !draft.sku_code.trim()) {
@@ -94,6 +108,7 @@ export function SkuForm({
       brand: draft.brand,
       barcode: draft.barcode,
       uomId: draft.uom_id,
+      productionWarehouseId: draft.production_warehouse_id || undefined,
       unitPrice: Number(draft.unit_price) || 0,
       taxRate: Number(draft.tax_rate) || 0,
       isActive: draft.is_active === "true",
@@ -218,6 +233,47 @@ export function SkuForm({
             </NativeSelect>
             <p className="text-[0.625rem] text-muted-foreground">
               Units come from the inventory master data.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="sku-production-warehouse">
+                Production warehouse
+              </Label>
+              <Link
+                href="/inventory/warehouses"
+                className="text-[0.625rem] font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Manage warehouses
+              </Link>
+            </div>
+            <NativeSelect
+              id="sku-production-warehouse"
+              value={draft.production_warehouse_id}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  production_warehouse_id: event.target.value,
+                })
+              }
+              className="w-full"
+              disabled={warehouseOptions.length === 0}
+            >
+              <option value="">
+                {warehouseOptions.length === 0
+                  ? "No warehouses configured"
+                  : "No production warehouse"}
+              </option>
+              {warehouseOptions.map((warehouse) => (
+                <option key={warehouse.id} value={warehouse.id}>
+                  {warehouse.name} ({warehouse.code})
+                  {warehouse.is_active ? "" : " · inactive"}
+                </option>
+              ))}
+            </NativeSelect>
+            <p className="text-[0.625rem] text-muted-foreground">
+              Optional label only. It identifies the item&apos;s production
+              warehouse and does not affect stock or availability.
             </p>
           </div>
           <div className="space-y-1.5">
