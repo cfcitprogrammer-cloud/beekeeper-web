@@ -4,14 +4,23 @@ import Link from "next/link"
 import { InventoryWarehousesManager } from "@/components/inventory/warehouses-manager"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
+import { getAccessContext } from "@/lib/auth/access"
 import { requirePermission } from "@/lib/auth/guards"
-import { PERMISSIONS } from "@/lib/auth/permissions"
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions"
 import { getInventoryWarehouses } from "@/lib/data/queries"
 
 export default async function InventoryWarehousesPage() {
   await requirePermission(PERMISSIONS.INVENTORY_VIEW)
 
-  const result = await getInventoryWarehouses()
+  const [result, access] = await Promise.all([
+    getInventoryWarehouses(),
+    getAccessContext(),
+  ])
+
+  const canImport = hasPermission(
+    access.permissions,
+    PERMISSIONS.INVENTORY_CREATE
+  )
 
   return (
     <div className="space-y-5">
@@ -31,7 +40,10 @@ export default async function InventoryWarehousesPage() {
           </Button>
         }
       />
-      <InventoryWarehousesManager warehouses={result.data} />
+      <InventoryWarehousesManager
+        warehouses={result.data}
+        canImport={canImport}
+      />
     </div>
   )
 }

@@ -26,6 +26,7 @@ All notable changes to this project are documented here. Entries are grouped by 
 - Usage editor (`/production/usage-editor`) gained a critical-module warning banner, status badges/column, cancel/restore actions (with BOM cascade), bulk cancel/restore, and a per-line changelog history dialog.
 - The editor table is paginated (10 / 25 / 50 / 100 rows per page) with range and page controls, and the SKU filter is a free-text SKU-code search instead of a SKU dropdown.
 - The production audit report now uses the same free-text SKU-code filter (case-insensitive partial match) instead of a SKU dropdown.
+- The production audit report now shows each SKU's production warehouse and includes it in CSV, Excel and PDF exports.
 - Submitted usage can be edited by its submitter before the cutoff when `allow_submitter_edit` is enabled (quantities, date, notes, or marking as cancellation).
 - Duplicate submissions for the same stage + SKU + usage date are blocked unless `allow_duplicates` is enabled; cancelled usage no longer blocks a new submission.
 - Import now updates existing lines **and** adds non-existent lines, subject to the configured rules, and writes `import` changelog entries. Import conflicts offer "Mark cancellation" instead of delete.
@@ -64,6 +65,7 @@ All notable changes to this project are documented here. Entries are grouped by 
 - Stock changes require `inventory.update`; viewing requires `inventory.view`. Movements run through atomic Postgres functions so balances and ledger entries stay in sync, and insufficient stock is rejected.
 - Warehouses with positive stock or movement history can no longer be deleted; deactivate them instead to preserve the audit trail.
 - The production warehouse label on SKUs remains independent of stock and never affects balances.
+- Warehouses now support **Import** (CSV) and **Export** (CSV, Excel, PDF) from the warehouse directory, matching the SKU catalog flow.
 - Migration: `20261124_warehouse_stock.sql`.
 
 ### SKU catalog mass import & export

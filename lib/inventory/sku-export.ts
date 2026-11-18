@@ -151,7 +151,7 @@ export function exportSkuBomCsv(rows: SkuBomExportRow[]) {
 
 type TableColumn = { header: string; width: number }
 
-type TableExport = {
+export type TableExport = {
   fileName: string
   sheetName: string
   title: string
@@ -169,7 +169,7 @@ const EXCEL_BORDER = {
   right: { style: "thin" as const, color: { argb: "FFE2E8F0" } },
 }
 
-async function exportExcel({
+export async function exportExcel({
   fileName,
   sheetName,
   title,
@@ -289,7 +289,7 @@ const PDF_COLORS = {
   header: [30, 41, 59] as [number, number, number],
 }
 
-async function exportPdf({
+export async function exportPdf({
   fileName,
   title,
   subtitle,

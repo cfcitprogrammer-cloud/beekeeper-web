@@ -10,12 +10,15 @@ import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
-import type { InventoryWarehouse } from "@/types/database"
+import { InventoryWarehouse } from "@/types/database"
+import { WarehouseImportExport } from "@/components/inventory/warehouse-import-export"
 
 export function InventoryWarehousesManager({
   warehouses,
+  canImport = false,
 }: {
   warehouses: InventoryWarehouse[]
+  canImport?: boolean
 }) {
   const router = useRouter()
 
@@ -151,10 +154,13 @@ export function InventoryWarehousesManager({
       emptyIcon={Warehouse}
       onRowClick={(row) => router.push(`/inventory/warehouses/${row.id}`)}
       toolbar={
-        <Button size="sm" render={<Link href="/inventory/warehouses/new" />}>
-          <Plus />
-          New warehouse
-        </Button>
+        <>
+          <WarehouseImportExport canImport={canImport} warehouses={warehouses} />
+          <Button size="sm" render={<Link href="/inventory/warehouses/new" />}>
+            <Plus />
+            New warehouse
+          </Button>
+        </>
       }
     />
   )
