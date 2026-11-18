@@ -149,7 +149,7 @@ export function InventoryWarehousesManager({
       emptyTitle="No warehouses yet"
       emptyDescription="Add the warehouses used to label where inventory items belong."
       emptyIcon={Warehouse}
-      onRowClick={(row) => router.push(`/inventory/warehouses/${row.id}/edit`)}
+      onRowClick={(row) => router.push(`/inventory/warehouses/${row.id}`)}
       toolbar={
         <Button size="sm" render={<Link href="/inventory/warehouses/new" />}>
           <Plus />

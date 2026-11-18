@@ -486,6 +486,40 @@ export interface InventoryWarehouse {
   updated_at: ISODateTime
 }
 
+export type WarehouseMovementType =
+  | "receipt"
+  | "issue"
+  | "adjustment"
+  | "transfer_in"
+  | "transfer_out"
+
+export interface WarehouseStock {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID | null
+  warehouse_id: UUID
+  sku_id: UUID
+  quantity: number
+  created_at: ISODateTime
+  updated_at: ISODateTime
+}
+
+export interface WarehouseStockMovement {
+  id: UUID
+  company_id: UUID
+  workspace_id: UUID | null
+  warehouse_id: UUID
+  sku_id: UUID
+  movement_type: WarehouseMovementType
+  quantity: number
+  balance_after: number
+  reference: string | null
+  notes: string | null
+  transfer_group_id: UUID | null
+  created_by: UUID | null
+  created_at: ISODateTime
+}
+
 export interface Sku {
   id: UUID
   company_id: UUID
@@ -519,6 +553,34 @@ export interface SkuComponent {
 
 export interface SkuComponentWithSku extends SkuComponent {
   component: Pick<Sku, "id" | "sku_code" | "name" | "brand" | "uom" | "is_active"> | null
+}
+
+export type StockSkuSummary = Pick<
+  Sku,
+  "id" | "sku_code" | "name" | "brand" | "uom" | "is_active"
+>
+
+export type WarehouseStockWithSku = WarehouseStock & {
+  sku: StockSkuSummary | null
+}
+
+export type WarehouseStockMovementWithSku = WarehouseStockMovement & {
+  sku: StockSkuSummary | null
+}
+
+export type InventoryStockRow = WarehouseStock & {
+  sku: StockSkuSummary | null
+  warehouse: Pick<
+    InventoryWarehouse,
+    "id" | "code" | "name" | "is_active"
+  > | null
+}
+
+export type SkuStockByWarehouse = WarehouseStock & {
+  warehouse: Pick<
+    InventoryWarehouse,
+    "id" | "code" | "name" | "is_active"
+  > | null
 }
 
 /* -------------------------------------------------------------------------- */

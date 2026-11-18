@@ -340,6 +340,11 @@ export const navSections: NavSection[] = [
         permission: PERMISSIONS.INVENTORY_VIEW,
         children: [
           {
+            title: "Stock on hand",
+            href: "/inventory/stock",
+            permission: PERMISSIONS.INVENTORY_VIEW,
+          },
+          {
             title: "SKU catalog",
             href: "/inventory/skus",
             permission: PERMISSIONS.INVENTORY_VIEW,

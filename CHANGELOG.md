@@ -56,6 +56,16 @@ All notable changes to this project are documented here. Entries are grouped by 
 - Catalog CSV import/export now includes a `production_warehouse` column; imports match by warehouse code or name and require the warehouse to exist first.
 - Migration: `20261123_inventory_warehouses.sql`.
 
+### Warehouse stock management
+- Warehouses now hold live stock: on-hand balances per `(warehouse, SKU)` backed by an append-only movement ledger.
+- Warehouse detail (`/inventory/warehouses/[id]`) shows stock on hand, movement history, and a record-movement dialog for receipts, issues, adjustments and transfers.
+- New `/inventory/stock` overview lists on-hand balances across warehouses with totals, per-warehouse filtering and a record-movement action.
+- SKU detail shows stock by warehouse, with links into each warehouse.
+- Stock changes require `inventory.update`; viewing requires `inventory.view`. Movements run through atomic Postgres functions so balances and ledger entries stay in sync, and insufficient stock is rejected.
+- Warehouses with positive stock or movement history can no longer be deleted; deactivate them instead to preserve the audit trail.
+- The production warehouse label on SKUs remains independent of stock and never affects balances.
+- Migration: `20261124_warehouse_stock.sql`.
+
 ### SKU catalog mass import & export
 - The SKU catalog toolbar now has an **Import** menu with two mass-import flows: **SKU catalog** and **BOM & components**.
 - SKU catalog import matches rows by `sku_code`; blank cells preserve existing values, new SKUs default to price/tax `0`, active, and `PCS`. Category names resolve automatically and missing categories are created.

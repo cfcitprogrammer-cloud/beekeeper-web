@@ -1,10 +1,14 @@
 import Link from "next/link"
-import { ArrowLeft, Package, Pencil } from "lucide-react"
+import { ArrowLeft, Boxes, Package, Pencil } from "lucide-react"
 
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
-import { formatCurrency } from "@/lib/format"
-import type { SkuComponentWithSku, SkuWithCategory } from "@/types/database"
+import { formatCurrency, formatNumber } from "@/lib/format"
+import type {
+  SkuComponentWithSku,
+  SkuStockByWarehouse,
+  SkuWithCategory,
+} from "@/types/database"
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === "") return null
@@ -22,11 +26,15 @@ export function SkuDetail({
   sku,
   uomLabel,
   components,
+  stock,
 }: {
   sku: SkuWithCategory
   uomLabel?: string | null
   components?: SkuComponentWithSku[]
+  stock?: SkuStockByWarehouse[]
 }) {
+  const totalStock = (stock ?? []).reduce((sum, row) => sum + row.quantity, 0)
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
@@ -111,6 +119,64 @@ export function SkuDetail({
           </div>
         ) : null}
       </div>
+
+      {stock !== undefined ? (
+        <div className="rounded-lg border bg-card p-4 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <Boxes className="mt-0.5 size-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-semibold">Stock on hand</p>
+                <p className="text-[0.625rem] text-muted-foreground">
+                  Balances by warehouse. The production warehouse label above
+                  does not affect these balances.
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-mono text-lg font-semibold tabular-nums">
+                {formatNumber(totalStock)}
+              </p>
+              <p className="text-[0.625rem] text-muted-foreground">
+                {uomLabel ?? sku.uom} total
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-1.5">
+            {stock.length === 0 ? (
+              <p className="rounded-md border border-dashed px-3 py-2 text-[0.625rem] text-muted-foreground">
+                No stock recorded in any warehouse. Record a receipt under{" "}
+                <Link
+                  href="/inventory/stock"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Stock on hand
+                </Link>
+                .
+              </p>
+            ) : (
+              stock.map((row) => (
+                <Link
+                  key={row.id}
+                  href={`/inventory/warehouses/${row.warehouse_id}`}
+                  className="flex items-center justify-between rounded-md border px-3 py-2 text-xs transition-colors hover:bg-muted/50"
+                >
+                  <span className="min-w-0 truncate">
+                    {row.warehouse?.name ?? "Warehouse removed"}
+                    <span className="ml-1 font-mono text-[0.625rem] text-muted-foreground">
+                      {row.warehouse?.code ?? "—"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-mono tabular-nums">
+                    {formatNumber(row.quantity)} {uomLabel ?? sku.uom}
+                  </span>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

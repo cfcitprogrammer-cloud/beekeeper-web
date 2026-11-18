@@ -161,6 +161,8 @@ declare
     'sku_categories',
     'inventory_uoms',
     'inventory_warehouses',
+    'warehouse_stock',
+    'warehouse_stock_movements',
     'skus',
     'bookings',
     'booking_lines',

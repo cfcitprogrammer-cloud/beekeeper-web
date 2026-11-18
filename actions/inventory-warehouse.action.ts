@@ -34,6 +34,7 @@ export type UpdateInventoryWarehouseInput = Omit<
 function revalidateWarehousePaths() {
   revalidatePath("/inventory/warehouses")
   revalidatePath("/inventory/warehouses/new")
+  revalidatePath("/inventory/stock")
   revalidatePath("/inventory/skus")
   revalidatePath("/inventory/skus/new")
 }
@@ -169,6 +170,41 @@ export async function deleteInventoryWarehouse(
   if ((count ?? 0) > 0) {
     return failure(
       `This warehouse is assigned to ${count} SKU${count === 1 ? "" : "s"}. Deactivate it instead of deleting.`
+    )
+  }
+
+  const { count: stockCount, error: stockError } = await supabase
+    .from("warehouse_stock")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("warehouse_id", id)
+    .gt("quantity", 0)
+
+  if (stockError) {
+    console.error("[action:deleteInventoryWarehouse]", stockError)
+    return failure(stockError.message)
+  }
+
+  if ((stockCount ?? 0) > 0) {
+    return failure(
+      "This warehouse still holds stock. Move or issue the remaining stock, then deactivate the warehouse instead of deleting it."
+    )
+  }
+
+  const { count: movementCount, error: movementError } = await supabase
+    .from("warehouse_stock_movements")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("warehouse_id", id)
+
+  if (movementError) {
+    console.error("[action:deleteInventoryWarehouse]", movementError)
+    return failure(movementError.message)
+  }
+
+  if ((movementCount ?? 0) > 0) {
+    return failure(
+      "This warehouse has stock movement history. Deactivate it instead of deleting so the audit trail stays intact."
     )
   }
 

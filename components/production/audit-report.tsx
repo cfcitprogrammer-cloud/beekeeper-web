@@ -160,6 +160,9 @@ export function ProductionAuditReport({
         stageSequence: line.stage?.sequence ?? null,
         sku: line.sku?.name ?? "No SKU",
         skuCode: line.sku?.sku_code ?? "—",
+        productionWarehouse: line.sku?.production_warehouse
+          ? `${line.sku.production_warehouse.name} (${line.sku.production_warehouse.code})`
+          : "",
         quantity: line.quantity,
         uom: line.uom ?? line.sku?.uom ?? "",
         submitter: line.submitter
@@ -299,6 +302,23 @@ export function ProductionAuditReport({
           </p>
         </div>
       ),
+    },
+    {
+      id: "warehouse",
+      header: "Prod. warehouse",
+      hideBelow: "lg",
+      sortValue: (row) => row.sku?.production_warehouse?.name ?? "",
+      cell: (row) =>
+        row.sku?.production_warehouse ? (
+          <div>
+            <p className="text-xs">{row.sku.production_warehouse.name}</p>
+            <p className="font-mono text-[0.625rem] text-muted-foreground">
+              {row.sku.production_warehouse.code}
+            </p>
+          </div>
+        ) : (
+          <span className="text-[0.625rem] text-muted-foreground">—</span>
+        ),
     },
     {
       id: "quantity",
@@ -574,6 +594,8 @@ export function ProductionAuditReport({
             row.stage?.sequence,
             row.sku?.name,
             row.sku?.sku_code,
+            row.sku?.production_warehouse?.name,
+            row.sku?.production_warehouse?.code,
             row.submitter?.first_name,
             row.submitter?.last_name,
             row.submitter?.employee_no,

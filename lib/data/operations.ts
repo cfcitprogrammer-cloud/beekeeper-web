@@ -213,6 +213,12 @@ export type ProductionSkuSummary = Pick<
   "id" | "sku_code" | "name" | "brand" | "uom" | "is_active"
 > & {
   components?: Array<{ componentSkuId: string; quantity: number }>
+  /** Descriptive label only; not used for stock or availability. */
+  production_warehouse?: {
+    id: string
+    code: string
+    name: string
+  } | null
 }
 
 export type ProductionStageWithRelations = ProductionStage & {
@@ -465,11 +471,15 @@ export async function getProductionUsage(
       (workspaceId
         ? supabase
             .from("skus")
-            .select("id,sku_code,name,brand,uom,is_active")
+            .select(
+              "id,sku_code,name,brand,uom,is_active,production_warehouse:inventory_warehouses!skus_production_warehouse_id_fkey(id,code,name)"
+            )
             .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
         : supabase
             .from("skus")
-            .select("id,sku_code,name,brand,uom,is_active")),
+            .select(
+              "id,sku_code,name,brand,uom,is_active,production_warehouse:inventory_warehouses!skus_production_warehouse_id_fkey(id,code,name)"
+            )),
       supabase
         .from("employees")
         .select("id,employee_no,first_name,last_name,email,user_id"),
@@ -502,7 +512,7 @@ export async function getProductionUsage(
     >[]).map((stage) => [stage.id, stage])
   )
   const skus = new Map(
-    ((skusResult.data ?? []) as ProductionSkuSummary[]).map((sku) => [
+    ((skusResult.data ?? []) as unknown as ProductionSkuSummary[]).map((sku) => [
       sku.id,
       sku,
     ])

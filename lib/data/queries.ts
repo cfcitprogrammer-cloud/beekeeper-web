@@ -20,6 +20,7 @@ import type {
   LeaveBalanceWithRelations,
   LeaveRequestWithRelations,
   Holiday,
+  InventoryStockRow,
   InventoryUom,
   InventoryWarehouse,
   LeaveType,
@@ -28,8 +29,11 @@ import type {
   Position,
   Shift,
   SkuCategory,
+  SkuStockByWarehouse,
   SkuWithCategory,
   SkuComponentWithSku,
+  WarehouseStockMovementWithSku,
+  WarehouseStockWithSku,
   Workspace,
   WorkspaceLocation,
 } from "@/types/database"
@@ -1273,14 +1277,107 @@ export async function getInventoryWarehouse(
   id: string
 ): Promise<QueryResult<InventoryWarehouse | null>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  const query = supabase
     .from("inventory_warehouses")
     .select("*")
     .eq("id", id)
-    .maybeSingle()
+  const { data, error } = await (workspaceId
+    ? query.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    : query
+  ).maybeSingle()
 
   logError("inventory-warehouse", error)
   return empty((data as InventoryWarehouse | null) ?? null)
+}
+
+const STOCK_SKU_COLUMNS = "id,sku_code,name,brand,uom,is_active"
+
+export async function getWarehouseStock(
+  warehouseId: string
+): Promise<QueryResult<WarehouseStockWithSku[]>> {
+  const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  const query = supabase
+    .from("warehouse_stock")
+    .select(`*, sku:skus(${STOCK_SKU_COLUMNS})`)
+    .eq("warehouse_id", warehouseId)
+    .order("quantity", { ascending: false })
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
+
+  logError("warehouse-stock", error)
+  return empty((data as WarehouseStockWithSku[] | null) ?? [])
+}
+
+export async function getWarehouseStockMovements(
+  warehouseId: string,
+  limit = 100
+): Promise<QueryResult<WarehouseStockMovementWithSku[]>> {
+  const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  const query = supabase
+    .from("warehouse_stock_movements")
+    .select(`*, sku:skus(${STOCK_SKU_COLUMNS})`)
+    .eq("warehouse_id", warehouseId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
+
+  logError("warehouse-stock-movements", error)
+  return empty((data as WarehouseStockMovementWithSku[] | null) ?? [])
+}
+
+export async function getInventoryStock(): Promise<
+  QueryResult<InventoryStockRow[]>
+> {
+  const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  const query = supabase
+    .from("warehouse_stock")
+    .select(
+      `*, sku:skus(${STOCK_SKU_COLUMNS}), warehouse:inventory_warehouses(id,code,name,is_active)`
+    )
+    .gt("quantity", 0)
+    .order("quantity", { ascending: false })
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
+
+  logError("inventory-stock", error)
+  return empty((data as InventoryStockRow[] | null) ?? [])
+}
+
+export async function getSkuStock(
+  skuId: string
+): Promise<QueryResult<SkuStockByWarehouse[]>> {
+  const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  const query = supabase
+    .from("warehouse_stock")
+    .select("*, warehouse:inventory_warehouses(id,code,name,is_active)")
+    .eq("sku_id", skuId)
+    .gt("quantity", 0)
+    .order("quantity", { ascending: false })
+  const { data, error } = await (workspaceId
+    ? query.eq("workspace_id", workspaceId)
+    : query)
+
+  logError("sku-stock", error)
+  return empty((data as SkuStockByWarehouse[] | null) ?? [])
 }
 
 export async function getSkuCategories(): Promise<QueryResult<SkuCategory[]>> {

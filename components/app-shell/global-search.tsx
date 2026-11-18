@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   Activity,
   ArrowLeftRight,
+  Boxes,
   CalendarDays,
   Clock3,
   Factory,
@@ -75,6 +76,7 @@ const quickLinks = [
   { title: "Usage editor", href: "/production/usage-editor", icon: Table2, group: "Field operations" },
   { title: "Usage settings", href: "/production/usage-settings", icon: Settings2, group: "Field operations" },
   { title: "SKU catalog", href: "/inventory/skus", icon: Package, group: "Field operations" },
+  { title: "Stock on hand", href: "/inventory/stock", icon: Boxes, group: "Field operations" },
   { title: "SKU categories", href: "/inventory/categories", icon: Package, group: "Field operations" },
   { title: "Warehouses", href: "/inventory/warehouses", icon: Warehouse, group: "Field operations" },
   { title: "Bookings register", href: "/bookings", icon: ShoppingCart, group: "Field operations" },

@@ -34,6 +34,7 @@ export type AuditExportRow = {
   stageSequence: number | null
   sku: string
   skuCode: string
+  productionWarehouse: string
   quantity: number
   uom: string
   submitter: string
@@ -120,6 +121,7 @@ const CSV_HEADERS = [
   "Stage sequence",
   "SKU",
   "SKU code",
+  "Production warehouse",
   "Quantity",
   "UOM",
   "Submitted by",
@@ -145,6 +147,7 @@ export function buildAuditCsv(rows: AuditExportRow[]) {
         row.stageSequence ?? "",
         row.sku,
         row.skuCode,
+        row.productionWarehouse,
         row.quantity,
         row.uom,
         row.submitter,
@@ -179,6 +182,7 @@ const EXCEL_COLUMNS = [
   { header: "Seq.", width: 7 },
   { header: "SKU", width: 30 },
   { header: "SKU code", width: 16 },
+  { header: "Production warehouse", width: 24 },
   { header: "Quantity", width: 12 },
   { header: "UOM", width: 9 },
   { header: "Submitted by", width: 24 },
@@ -284,7 +288,7 @@ export async function exportAuditExcel(
     }
     cell.alignment = {
       vertical: "middle",
-      horizontal: index === 8 ? "right" : "left",
+      horizontal: index === 9 ? "right" : "left",
       wrapText: true,
     }
     cell.border = EXCEL_BORDER
@@ -301,6 +305,7 @@ export async function exportAuditExcel(
       row.stageSequence ?? "",
       row.sku,
       row.skuCode,
+      row.productionWarehouse,
       row.quantity,
       row.uom,
       row.submitter,
@@ -313,11 +318,11 @@ export async function exportAuditExcel(
       cell.font = { size: 9, color: { argb: "FF334155" } }
       cell.alignment = {
         vertical: "middle",
-        horizontal: columnNumber === 9 ? "right" : "left",
-        wrapText: columnNumber === 13,
+        horizontal: columnNumber === 10 ? "right" : "left",
+        wrapText: columnNumber === 14,
       }
       cell.border = EXCEL_BORDER
-      if (columnNumber === 9) cell.numFmt = "#,##0.####"
+      if (columnNumber === 10) cell.numFmt = "#,##0.####"
       if (striped) {
         cell.fill = {
           type: "pattern",
@@ -550,6 +555,7 @@ export async function exportAuditPdf(
           "Pipeline",
           "Stage",
           "SKU",
+          "Warehouse",
           "Qty",
           "UOM",
           "Submitted by",
@@ -564,6 +570,7 @@ export async function exportAuditPdf(
           ? row.stage
           : `${row.stage} (${row.stageSequence})`,
         `${row.skuCode} · ${row.sku}`,
+        row.productionWarehouse || "—",
         formatNumber(row.quantity),
         row.uom,
         row.submitter,
@@ -592,13 +599,14 @@ export async function exportAuditPdf(
       columnStyles: {
         0: { cellWidth: 23 },
         1: { cellWidth: 18 },
-        2: { cellWidth: 38 },
-        3: { cellWidth: 36 },
-        4: { cellWidth: 50 },
-        5: { cellWidth: 15, halign: "right" },
-        6: { cellWidth: 12 },
-        7: { cellWidth: 34 },
-        8: { cellWidth: "auto" },
+        2: { cellWidth: 34 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 44 },
+        5: { cellWidth: 28 },
+        6: { cellWidth: 14, halign: "right" },
+        7: { cellWidth: 11 },
+        8: { cellWidth: 30 },
+        9: { cellWidth: "auto" },
       },
       didDrawPage: (data) => {
         if (data.pageNumber > 1) {
