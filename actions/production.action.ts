@@ -14,10 +14,13 @@ import { logActivity } from "@/actions/helpers/activity"
 import { PERMISSIONS } from "@/lib/auth/permissions"
 import { cell, headerMap, parseCsv, toCsv } from "@/lib/csv"
 import {
-  isBeyondCutoff,
+  isOutsideUsageWindow,
   normalizeTime,
   resolveUsageStatus,
+  todayInTimeZone,
   toUsageSettings,
+  usageDateIssue,
+  usageWindow,
   type UsageSettings,
 } from "@/lib/production/usage-status"
 import type { ProductionUsageSettings } from "@/db/models/models"
@@ -50,7 +53,8 @@ type UsageChangelogInput = {
 
 async function loadUsageSettings(
   supabase: UsageActionSupabase,
-  companyId: string
+  companyId: string,
+  timeZone?: string | null
 ): Promise<UsageSettings> {
   const { data, error } = await supabase
     .from("production_usage_settings")
@@ -60,9 +64,24 @@ async function loadUsageSettings(
 
   if (error) {
     console.error("[action:loadUsageSettings]", error)
-    return toUsageSettings(null)
+    return toUsageSettings(null, timeZone)
   }
-  return toUsageSettings((data as ProductionUsageSettings | null) ?? null)
+  return toUsageSettings((data as ProductionUsageSettings | null) ?? null, timeZone)
+}
+
+/**
+ * Why a usage date is locked. The same window applies to every user, including
+ * usage editors and administrators.
+ */
+function lockedUsageDateMessage(
+  usageDate: string,
+  settings: UsageSettings,
+  now = new Date()
+) {
+  const window = usageWindow(settings, now)
+  const issue = usageDateIssue(usageDate, settings, now)
+  const direction = issue === "past" ? "older than" : "after"
+  return `Usage dated ${usageDate} is ${direction} the allowed window (${window.start} to ${window.end}) and can no longer be submitted, edited or cancelled.`
 }
 
 async function recordUsageChangelog(
@@ -98,6 +117,7 @@ async function recordUsageChangelog(
 async function expandBomComponentRows(
   supabase: UsageActionSupabase,
   companyId: string,
+  workspaceId: string | null,
   rows: { id: string; batch_id: string | null; sku_id: string | null }[]
 ) {
   const ids = new Set(rows.map((row) => row.id))
@@ -110,11 +130,15 @@ async function expandBomComponentRows(
   )
   if (parentSkuIds.length === 0) return ids
 
-  const { data: componentRows, error } = await supabase
+  let bomComponentsQuery = supabase
     .from("sku_components")
     .select("parent_sku_id, component_sku_id")
     .eq("company_id", companyId)
     .in("parent_sku_id", parentSkuIds)
+  if (workspaceId) {
+    bomComponentsQuery = bomComponentsQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: componentRows, error } = await bomComponentsQuery
 
   if (error) {
     console.error("[action:expandBomComponentRows]", error)
@@ -149,18 +173,26 @@ async function expandBomComponentRows(
   )
 
   const [byBatch, byId] = await Promise.all([
-    supabase
-      .from("production_usage")
-      .select("id, batch_id, sku_id")
-      .eq("company_id", companyId)
-      .in("batch_id", batchKeys)
-      .in("sku_id", componentSkuIds),
-    supabase
-      .from("production_usage")
-      .select("id, batch_id, sku_id")
-      .eq("company_id", companyId)
-      .in("id", batchKeys)
-      .in("sku_id", componentSkuIds),
+    (() => {
+      let q = supabase
+        .from("production_usage")
+        .select("id, batch_id, sku_id")
+        .eq("company_id", companyId)
+        .in("batch_id", batchKeys)
+        .in("sku_id", componentSkuIds)
+      if (workspaceId) q = q.eq("workspace_id", workspaceId)
+      return q
+    })(),
+    (() => {
+      let q = supabase
+        .from("production_usage")
+        .select("id, batch_id, sku_id")
+        .eq("company_id", companyId)
+        .in("id", batchKeys)
+        .in("sku_id", componentSkuIds)
+      if (workspaceId) q = q.eq("workspace_id", workspaceId)
+      return q
+    })(),
   ])
 
   if (byBatch.error || byId.error) {
@@ -267,7 +299,7 @@ export async function updateProductionPipeline(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data, error } = await supabase
+  let pipelineUpdateQuery = supabase
     .from("production_pipelines")
     .update({
       name: input.name.trim(),
@@ -278,8 +310,10 @@ export async function updateProductionPipeline(
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
-    .select("id")
-    .single()
+  if (workspaceId) {
+    pipelineUpdateQuery = pipelineUpdateQuery.eq("workspace_id", workspaceId)
+  }
+  const { data, error } = await pipelineUpdateQuery.select("id").single()
 
   if (error) {
     console.error("[action:updateProductionPipeline]", error)
@@ -316,11 +350,15 @@ export async function deleteProductionPipeline(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { error } = await supabase
+  let pipelineDeleteQuery = supabase
     .from("production_pipelines")
     .delete()
     .eq("id", id)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    pipelineDeleteQuery = pipelineDeleteQuery.eq("workspace_id", workspaceId)
+  }
+  const { error } = await pipelineDeleteQuery
 
   if (error) {
     console.error("[action:deleteProductionPipeline]", error)
@@ -366,22 +404,28 @@ export async function addProductionStage(
   const { supabase, companyId, workspaceId } = authorized.context
   if (!workspaceId) return failure("No workspace is associated with your account.")
 
-  const { data: pipeline, error: pipelineError } = await supabase
+  let pipelineLookupQuery = supabase
     .from("production_pipelines")
     .select("id")
     .eq("id", input.pipelineId)
     .eq("company_id", companyId)
-    .maybeSingle()
+  if (workspaceId) {
+    pipelineLookupQuery = pipelineLookupQuery.eq("workspace_id", workspaceId)
+  }
+  const { data: pipeline, error: pipelineError } = await pipelineLookupQuery.maybeSingle()
   if (pipelineError) return failure(pipelineError.message)
   if (!pipeline) return failure("Pipeline not found in this company.")
 
-  const { data: lastStage } = await supabase
+  let lastStageQuery = supabase
     .from("production_stages")
     .select("sequence")
     .eq("pipeline_id", input.pipelineId)
     .order("sequence", { ascending: false })
     .limit(1)
-    .maybeSingle()
+  if (workspaceId) {
+    lastStageQuery = lastStageQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: lastStage } = await lastStageQuery.maybeSingle()
 
   const sequence = (lastStage?.sequence ?? 0) + 1
 
@@ -440,7 +484,7 @@ export async function updateProductionStage(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data, error } = await supabase
+  let stageUpdateQuery = supabase
     .from("production_stages")
     .update({
       name: input.name.trim(),
@@ -450,8 +494,10 @@ export async function updateProductionStage(
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
-    .select("id")
-    .single()
+  if (workspaceId) {
+    stageUpdateQuery = stageUpdateQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data, error } = await stageUpdateQuery.select("id").single()
 
   if (error) {
     console.error("[action:updateProductionStage]", error)
@@ -488,11 +534,15 @@ export async function deleteProductionStage(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { error } = await supabase
+  let stageDeleteQuery = supabase
     .from("production_stages")
     .delete()
     .eq("id", id)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    stageDeleteQuery = stageDeleteQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { error } = await stageDeleteQuery
 
   if (error) {
     console.error("[action:deleteProductionStage]", error)
@@ -529,13 +579,17 @@ export async function reorderProductionStages(
   const authorized = await getAuthorizedContext(PERMISSIONS.PRODUCTION_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data: stages, error: stageError } = await supabase
+  let reorderStagesQuery = supabase
     .from("production_stages")
     .select("id")
     .eq("company_id", companyId)
     .eq("pipeline_id", pipelineId)
+  if (workspaceId) {
+    reorderStagesQuery = reorderStagesQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: stages, error: stageError } = await reorderStagesQuery
   if (stageError) return failure(stageError.message)
 
   const stageIds = new Set(((stages ?? []) as { id: string }[]).map((stage) => stage.id))
@@ -546,20 +600,28 @@ export async function reorderProductionStages(
   // Move to temporary negative sequences first to avoid the unique
   // (pipeline_id, sequence) constraint during the swap.
   for (let index = 0; index < orderedStageIds.length; index += 1) {
-    const { error } = await supabase
+    let reorderUpdateQuery = supabase
       .from("production_stages")
       .update({ sequence: -(index + 1), updated_at: new Date().toISOString() })
       .eq("id", orderedStageIds[index])
       .eq("company_id", companyId)
+    if (workspaceId) {
+      reorderUpdateQuery = reorderUpdateQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    }
+    const { error } = await reorderUpdateQuery
     if (error) return failure(error.message)
   }
 
   for (let index = 0; index < orderedStageIds.length; index += 1) {
-    const { error } = await supabase
+    let reorderUpdateQuery = supabase
       .from("production_stages")
       .update({ sequence: index + 1, updated_at: new Date().toISOString() })
       .eq("id", orderedStageIds[index])
       .eq("company_id", companyId)
+    if (workspaceId) {
+      reorderUpdateQuery = reorderUpdateQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    }
+    const { error } = await reorderUpdateQuery
     if (error) return failure(error.message)
   }
 
@@ -586,12 +648,15 @@ export async function createProductionRun(
   const { supabase, companyId, workspaceId, userId } = authorized.context
   if (!workspaceId) return failure("No workspace is associated with your account.")
 
-  const { data: pipeline, error: pipelineError } = await supabase
+  let pipelineLookupQuery = supabase
     .from("production_pipelines")
     .select("id")
     .eq("id", input.pipelineId)
     .eq("company_id", companyId)
-    .maybeSingle()
+  if (workspaceId) {
+    pipelineLookupQuery = pipelineLookupQuery.eq("workspace_id", workspaceId)
+  }
+  const { data: pipeline, error: pipelineError } = await pipelineLookupQuery.maybeSingle()
   if (pipelineError) return failure(pipelineError.message)
   if (!pipeline) return failure("Pipeline not found in this company.")
 
@@ -655,12 +720,15 @@ export async function assignStageSkus(
 
   const { supabase, companyId, workspaceId, userId } = authorized.context
 
-  const { data: stage, error: stageError } = await supabase
+  let stageLookupQuery = supabase
     .from("production_stages")
     .select("id, name")
     .eq("id", input.stageId)
     .eq("company_id", companyId)
-    .maybeSingle()
+  if (workspaceId) {
+    stageLookupQuery = stageLookupQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: stage, error: stageError } = await stageLookupQuery.maybeSingle()
   if (stageError) return failure(stageError.message)
   if (!stage) return failure("Production stage not found in this company.")
 
@@ -669,22 +737,30 @@ export async function assignStageSkus(
   )
 
   if (skuIds.length > 0) {
-    const { data: skus, error: skuError } = await supabase
+    let skuLookupQuery = supabase
       .from("skus")
       .select("id")
       .eq("company_id", companyId)
       .in("id", skuIds)
+    if (workspaceId) {
+      skuLookupQuery = skuLookupQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    }
+    const { data: skus, error: skuError } = await skuLookupQuery
     if (skuError) return failure(skuError.message)
     if ((skus?.length ?? 0) !== skuIds.length) {
       return failure("One or more SKUs do not belong to this company.")
     }
   }
 
-  const { data: existing, error: existingError } = await supabase
+  let existingStageSkusQuery = supabase
     .from("production_stage_skus")
     .select("sku_id")
     .eq("company_id", companyId)
     .eq("stage_id", stage.id)
+  if (workspaceId) {
+    existingStageSkusQuery = existingStageSkusQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: existing, error: existingError } = await existingStageSkusQuery
   if (existingError) return failure(existingError.message)
 
   const existingIds = new Set(
@@ -695,12 +771,16 @@ export async function assignStageSkus(
   const toRemove = Array.from(existingIds).filter((id) => !selectedIds.has(id))
 
   if (toRemove.length > 0) {
-    const { error } = await supabase
+    let removeStageSkusQuery = supabase
       .from("production_stage_skus")
       .delete()
       .eq("company_id", companyId)
       .eq("stage_id", stage.id)
       .in("sku_id", toRemove)
+    if (workspaceId) {
+      removeStageSkusQuery = removeStageSkusQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    }
+    const { error } = await removeStageSkusQuery
     if (error) return failure(error.message)
   }
 
@@ -785,36 +865,47 @@ export async function createProductionUsage(
   ])
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
+  const { supabase, companyId, workspaceId, userId, companyTimezone } =
+    authorized.context
   if (!workspaceId) return failure("No workspace is associated with your account.")
 
-  const { data: stage, error: stageError } = await supabase
+  let usageStageLookupQuery = supabase
     .from("production_stages")
     .select("id, name, pipeline_id")
     .eq("id", input.stageId)
     .eq("company_id", companyId)
-    .maybeSingle()
+  if (workspaceId) {
+    usageStageLookupQuery = usageStageLookupQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: stage, error: stageError } = await usageStageLookupQuery.maybeSingle()
   if (stageError) return failure(stageError.message)
   if (!stage) return failure("Production stage not found in this company.")
   if (stage.pipeline_id !== input.pipelineId) {
     return failure("The selected stage does not belong to that pipeline.")
   }
 
-  const { data: pipeline, error: pipelineError } = await supabase
+  let pipelineLookupQuery = supabase
     .from("production_pipelines")
     .select("id")
     .eq("id", input.pipelineId)
     .eq("company_id", companyId)
-    .maybeSingle()
+  if (workspaceId) {
+    pipelineLookupQuery = pipelineLookupQuery.eq("workspace_id", workspaceId)
+  }
+  const { data: pipeline, error: pipelineError } = await pipelineLookupQuery.maybeSingle()
   if (pipelineError) return failure(pipelineError.message)
   if (!pipeline) return failure("Production pipeline not found in this company.")
 
   const skuIds = Array.from(itemsBySku.keys())
-  const { data: stageAssignments, error: assignmentError } = await supabase
+  let stageAssignmentsQuery = supabase
     .from("production_stage_skus")
     .select("sku_id, sku:skus(id, sku_code, name, uom)")
     .eq("company_id", companyId)
     .eq("stage_id", stage.id)
+  if (workspaceId) {
+    stageAssignmentsQuery = stageAssignmentsQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: stageAssignments, error: assignmentError } = await stageAssignmentsQuery
   if (assignmentError) return failure(assignmentError.message)
 
   const assignedSkus = new Map(
@@ -833,12 +924,16 @@ export async function createProductionUsage(
   // usage lines for them. They are not stored in production_stage_skus, so
   // allow any component of an assigned BOM parent as well.
   const assignedParentIds = Array.from(assignedSkus.keys())
+  let componentAssignmentQuery = supabase
+    .from("sku_components")
+    .select("parent_sku_id, component_sku_id")
+    .eq("company_id", companyId)
+    .in("parent_sku_id", assignedParentIds)
+  if (workspaceId) {
+    componentAssignmentQuery = componentAssignmentQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
   const { data: componentAssignmentRows, error: componentAssignmentError } =
-    await supabase
-      .from("sku_components")
-      .select("parent_sku_id, component_sku_id")
-      .eq("company_id", companyId)
-      .in("parent_sku_id", assignedParentIds)
+    await componentAssignmentQuery
 
   if (componentAssignmentError) {
     return failure(componentAssignmentError.message)
@@ -855,11 +950,15 @@ export async function createProductionUsage(
     (id) => !assignedSkus.has(id)
   )
   if (missingComponentSkus.length > 0) {
-    const { data: componentSkus, error: componentSkuError } = await supabase
+    let componentSkusQuery = supabase
       .from("skus")
       .select("id, sku_code, name, uom")
       .eq("company_id", companyId)
       .in("id", missingComponentSkus)
+    if (workspaceId) {
+      componentSkusQuery = componentSkusQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    }
+    const { data: componentSkus, error: componentSkuError } = await componentSkusQuery
 
     if (componentSkuError) return failure(componentSkuError.message)
 
@@ -885,11 +984,15 @@ export async function createProductionUsage(
   // Only BOM SKUs (SKUs that own components) may be recorded as a parent
   // entry. Component SKUs are allowed only when they belong to a BOM parent
   // that is also part of this same usage entry.
-  const { data: componentRows, error: componentError } = await supabase
+  let componentRowsQuery = supabase
     .from("sku_components")
     .select("parent_sku_id, component_sku_id")
     .eq("company_id", companyId)
     .in("parent_sku_id", skuIds)
+  if (workspaceId) {
+    componentRowsQuery = componentRowsQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: componentRows, error: componentError } = await componentRowsQuery
   if (componentError) return failure(componentError.message)
 
   const bomParentIds = new Set(
@@ -910,7 +1013,11 @@ export async function createProductionUsage(
   }
 
   const now = new Date().toISOString()
-  const usageDate = input.usageDate?.trim() || now.slice(0, 10)
+  const requestedDate = input.usageDate?.trim()
+  if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+    return failure("Usage date must use the YYYY-MM-DD format.")
+  }
+  const usageDate = requestedDate || todayInTimeZone(companyTimezone)
   const batchId = randomUUID()
   const notes = input.notes?.trim() || null
 
@@ -918,15 +1025,27 @@ export async function createProductionUsage(
   // unless the company configuration allows them. A line only counts as a
   // duplicate while it is active: when every existing line for that SKU on the
   // date is cancelled, the user may submit the SKU again.
-  const settings = await loadUsageSettings(supabase, companyId)
+  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
+
+  // The allowed window applies to everyone, including usage editors: a usage
+  // date may only be submitted from the current business day through
+  // `cutoffDays` after it.
+  if (isOutsideUsageWindow(usageDate, settings)) {
+    return failure(lockedUsageDateMessage(usageDate, settings))
+  }
+
   if (!settings.allowDuplicates) {
-    const { data: existingRows, error: existingError } = await supabase
+    let existingUsageQuery = supabase
       .from("production_usage")
       .select("sku_id, status")
       .eq("company_id", companyId)
       .eq("stage_id", stage.id)
       .eq("usage_date", usageDate)
       .in("sku_id", skuIds)
+    if (workspaceId) {
+      existingUsageQuery = existingUsageQuery.eq("workspace_id", workspaceId)
+    }
+    const { data: existingRows, error: existingError } = await existingUsageQuery
 
     if (existingError) {
       console.error("[action:createProductionUsage]", existingError)
@@ -1042,7 +1161,7 @@ export async function updateProductionRunStatus(
   const normalized = runStatus(status)
   const now = new Date().toISOString()
 
-  const { data, error } = await supabase
+  let runStatusQuery = supabase
     .from("production_runs")
     .update({
       status: normalized,
@@ -1052,8 +1171,10 @@ export async function updateProductionRunStatus(
     })
     .eq("id", runId)
     .eq("company_id", companyId)
-    .select("id, status, run_no")
-    .single()
+  if (workspaceId) {
+    runStatusQuery = runStatusQuery.eq("workspace_id", workspaceId)
+  }
+  const { data, error } = await runStatusQuery.select("id, status, run_no").single()
 
   if (error) {
     console.error("[action:updateProductionRunStatus]", error)
@@ -1088,11 +1209,15 @@ export async function deleteProductionRun(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { error } = await supabase
+  let runDeleteQuery = supabase
     .from("production_runs")
     .delete()
     .eq("id", runId)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    runDeleteQuery = runDeleteQuery.eq("workspace_id", workspaceId)
+  }
+  const { error } = await runDeleteQuery
 
   if (error) {
     console.error("[action:deleteProductionRun]", error)
@@ -1242,7 +1367,9 @@ export async function updateProductionUsageLines(input: {
   const authorized = await getAuthorizedContext(PERMISSIONS.PRODUCTION_EDITOR)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
+  const { supabase, companyId, workspaceId, userId, companyTimezone } =
+    authorized.context
+  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
   const ids = Array.from(new Set(lines.map((line) => line.id)))
 
   type ExistingUsageRow = {
@@ -1254,11 +1381,15 @@ export async function updateProductionUsageLines(input: {
     status: string
   }
 
-  const { data: existingRows, error: existingError } = await supabase
+  let existingUsageLinesQuery = supabase
     .from("production_usage")
     .select("id, batch_id, quantity, usage_date, notes, status")
     .eq("company_id", companyId)
     .in("id", ids)
+  if (workspaceId) {
+    existingUsageLinesQuery = existingUsageLinesQuery.eq("workspace_id", workspaceId)
+  }
+  const { data: existingRows, error: existingError } = await existingUsageLinesQuery
 
   if (existingError) {
     console.error("[action:updateProductionUsageLines]", existingError)
@@ -1282,6 +1413,18 @@ export async function updateProductionUsageLines(input: {
       return failure(
         "Cancelled usage is read-only. Restore the line before editing it."
       )
+    }
+
+    // The window applies to usage editors too: completed/past usage and dates
+    // beyond the forward window stay locked.
+    if (isOutsideUsageWindow(row.usage_date, settings)) {
+      return failure(lockedUsageDateMessage(row.usage_date, settings))
+    }
+    if (
+      line.usageDate !== undefined &&
+      isOutsideUsageWindow(line.usageDate, settings)
+    ) {
+      return failure(lockedUsageDateMessage(line.usageDate, settings))
     }
 
     const payload: Record<string, unknown> = { updated_at: now }
@@ -1311,11 +1454,15 @@ export async function updateProductionUsageLines(input: {
       }
     }
 
-    const { error } = await supabase
+    let usageLineUpdateQuery = supabase
       .from("production_usage")
       .update(payload)
       .eq("id", line.id)
       .eq("company_id", companyId)
+    if (workspaceId) {
+      usageLineUpdateQuery = usageLineUpdateQuery.eq("workspace_id", workspaceId)
+    }
+    const { error } = await usageLineUpdateQuery
 
     if (error) {
       console.error("[action:updateProductionUsageLines]", error)
@@ -1386,7 +1533,9 @@ export async function setProductionUsageStatus(input: {
   const authorized = await getAuthorizedContext(PERMISSIONS.PRODUCTION_EDITOR)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
+  const { supabase, companyId, workspaceId, userId, companyTimezone } =
+    authorized.context
+  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
 
   type StatusRow = {
     id: string
@@ -1395,11 +1544,15 @@ export async function setProductionUsageStatus(input: {
     status: string
   }
 
-  const { data: selectedRows, error: selectedError } = await supabase
+  let selectedUsageRowsQuery = supabase
     .from("production_usage")
     .select("id, batch_id, sku_id, status")
     .eq("company_id", companyId)
     .in("id", ids)
+  if (workspaceId) {
+    selectedUsageRowsQuery = selectedUsageRowsQuery.eq("workspace_id", workspaceId)
+  }
+  const { data: selectedRows, error: selectedError } = await selectedUsageRowsQuery
 
   if (selectedError) {
     console.error("[action:setProductionUsageStatus]", selectedError)
@@ -1410,25 +1563,42 @@ export async function setProductionUsageStatus(input: {
   }
 
   const rows = selectedRows as StatusRow[]
-  const allIds = await expandBomComponentRows(supabase, companyId, rows)
+  const allIds = await expandBomComponentRows(supabase, companyId, workspaceId, rows)
 
-  const { data: targetRows, error: targetError } = await supabase
+  let targetUsageRowsQuery = supabase
     .from("production_usage")
-    .select("id, batch_id, status")
+    .select("id, batch_id, status, usage_date")
     .eq("company_id", companyId)
     .in("id", Array.from(allIds))
+  if (workspaceId) {
+    targetUsageRowsQuery = targetUsageRowsQuery.eq("workspace_id", workspaceId)
+  }
+  const { data: targetRows, error: targetError } = await targetUsageRowsQuery
 
   if (targetError) {
     console.error("[action:setProductionUsageStatus]", targetError)
     return failure(targetError.message)
   }
 
+  // Cancel and restore are part of the same lock: outside the allowed window
+  // nobody may change a usage line's lifecycle.
+  const lockedRow = ((targetRows ?? []) as { usage_date: string }[]).find(
+    (row) => isOutsideUsageWindow(row.usage_date, settings)
+  )
+  if (lockedRow) {
+    return failure(lockedUsageDateMessage(lockedRow.usage_date, settings))
+  }
+
   const now = new Date().toISOString()
-  const { error } = await supabase
+  let usageStatusUpdateQuery = supabase
     .from("production_usage")
     .update({ status: input.status, updated_at: now })
     .eq("company_id", companyId)
     .in("id", Array.from(allIds))
+  if (workspaceId) {
+    usageStatusUpdateQuery = usageStatusUpdateQuery.eq("workspace_id", workspaceId)
+  }
+  const { error } = await usageStatusUpdateQuery
 
   if (error) {
     console.error("[action:setProductionUsageStatus]", error)
@@ -1516,8 +1686,9 @@ export async function updateOwnProductionUsage(input: {
   ])
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
-  const settings = await loadUsageSettings(supabase, companyId)
+  const { supabase, companyId, workspaceId, userId, companyTimezone } =
+    authorized.context
+  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
   if (!settings.allowSubmitterEdit) {
     return failure(
       "Submitter edits are disabled. Ask an administrator to enable them in the usage settings."
@@ -1536,13 +1707,17 @@ export async function updateOwnProductionUsage(input: {
     recorded_by: string | null
   }
 
-  const { data: existingRows, error: existingError } = await supabase
+  let ownUsageRowsQuery = supabase
     .from("production_usage")
     .select(
       "id, batch_id, sku_id, quantity, usage_date, notes, status, submitted_by, recorded_by"
     )
     .eq("company_id", companyId)
     .in("id", ids)
+  if (workspaceId) {
+    ownUsageRowsQuery = ownUsageRowsQuery.eq("workspace_id", workspaceId)
+  }
+  const { data: existingRows, error: existingError } = await ownUsageRowsQuery
 
   if (existingError) {
     console.error("[action:updateOwnProductionUsage]", existingError)
@@ -1554,6 +1729,12 @@ export async function updateOwnProductionUsage(input: {
     return failure("One or more usage lines no longer exist in this company.")
   }
 
+  // Moving a line to a different date must stay inside the allowed window.
+  const nextUsageDate = input.usageDate?.trim()
+  if (nextUsageDate && isOutsideUsageWindow(nextUsageDate, settings)) {
+    return failure(lockedUsageDateMessage(nextUsageDate, settings))
+  }
+
   for (const row of rows) {
     const owner = row.submitted_by ?? row.recorded_by
     if (owner !== userId) {
@@ -1562,34 +1743,40 @@ export async function updateOwnProductionUsage(input: {
     if (resolveUsageStatus(row, settings) === "cancelled") {
       return failure("Cancelled usage can no longer be edited.")
     }
-    if (isBeyondCutoff(row.usage_date, settings)) {
-      return failure(
-        "The cutoff date/time has passed for this usage. Ask a usage editor to make the correction."
-      )
+    if (isOutsideUsageWindow(row.usage_date, settings)) {
+      return failure(lockedUsageDateMessage(row.usage_date, settings))
     }
   }
 
   const now = new Date().toISOString()
 
   if (input.cancel) {
-    const allIds = await expandBomComponentRows(supabase, companyId, rows)
+    const allIds = await expandBomComponentRows(supabase, companyId, workspaceId, rows)
 
-    const { data: affectedRows, error: affectedError } = await supabase
+    let affectedUsageRowsQuery = supabase
       .from("production_usage")
       .select("id, batch_id, status")
       .eq("company_id", companyId)
       .in("id", Array.from(allIds))
+    if (workspaceId) {
+      affectedUsageRowsQuery = affectedUsageRowsQuery.eq("workspace_id", workspaceId)
+    }
+    const { data: affectedRows, error: affectedError } = await affectedUsageRowsQuery
 
     if (affectedError) {
       console.error("[action:updateOwnProductionUsage]", affectedError)
       return failure(affectedError.message)
     }
 
-    const { error } = await supabase
+    let cancelUsageUpdateQuery = supabase
       .from("production_usage")
       .update({ status: "cancelled", updated_at: now })
       .eq("company_id", companyId)
       .in("id", Array.from(allIds))
+    if (workspaceId) {
+      cancelUsageUpdateQuery = cancelUsageUpdateQuery.eq("workspace_id", workspaceId)
+    }
+    const { error } = await cancelUsageUpdateQuery
 
     if (error) {
       console.error("[action:updateOwnProductionUsage]", error)
@@ -1675,11 +1862,15 @@ export async function updateOwnProductionUsage(input: {
       }
     }
 
-    const { error } = await supabase
+    let ownUsageUpdateQuery = supabase
       .from("production_usage")
       .update(payload)
       .eq("id", id)
       .eq("company_id", companyId)
+    if (workspaceId) {
+      ownUsageUpdateQuery = ownUsageUpdateQuery.eq("workspace_id", workspaceId)
+    }
+    const { error } = await ownUsageUpdateQuery
 
     if (error) {
       console.error("[action:updateOwnProductionUsage]", error)
@@ -2008,7 +2199,8 @@ export async function importProductionUsageUpdates(input: {
   const authorized = await getAuthorizedContext(PERMISSIONS.PRODUCTION_EDITOR)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId, workspaceId, userId } = authorized.context
+  const { supabase, companyId, workspaceId, userId, companyTimezone } =
+    authorized.context
 
   const parsed = parseCsv(input.csv)
   if (parsed.length < 2) {
@@ -2040,26 +2232,50 @@ export async function importProductionUsageUpdates(input: {
     )
   )
 
-  const settings = await loadUsageSettings(supabase, companyId)
+  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
 
   const [pipelinesResult, stagesResult, skusResult, assignmentsResult] =
     await Promise.all([
-      supabase
-        .from("production_pipelines")
-        .select("id, code, name")
-        .eq("company_id", companyId),
-      supabase
-        .from("production_stages")
-        .select("id, pipeline_id, sequence, name")
-        .eq("company_id", companyId),
-      supabase
-        .from("skus")
-        .select("id, sku_code, uom")
-        .eq("company_id", companyId),
-      supabase
-        .from("production_stage_skus")
-        .select("stage_id, sku_id")
-        .eq("company_id", companyId),
+      workspaceId
+        ? supabase
+            .from("production_pipelines")
+            .select("id, code, name")
+            .eq("company_id", companyId)
+            .eq("workspace_id", workspaceId)
+        : supabase
+            .from("production_pipelines")
+            .select("id, code, name")
+            .eq("company_id", companyId),
+      workspaceId
+        ? supabase
+            .from("production_stages")
+            .select("id, pipeline_id, sequence, name")
+            .eq("company_id", companyId)
+            .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+        : supabase
+            .from("production_stages")
+            .select("id, pipeline_id, sequence, name")
+            .eq("company_id", companyId),
+      workspaceId
+        ? supabase
+            .from("skus")
+            .select("id, sku_code, uom")
+            .eq("company_id", companyId)
+            .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+        : supabase
+            .from("skus")
+            .select("id, sku_code, uom")
+            .eq("company_id", companyId),
+      workspaceId
+        ? supabase
+            .from("production_stage_skus")
+            .select("stage_id, sku_id")
+            .eq("company_id", companyId)
+            .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+        : supabase
+            .from("production_stage_skus")
+            .select("stage_id, sku_id")
+            .eq("company_id", companyId),
     ])
 
   if (pipelinesResult.error) {
@@ -2087,22 +2303,40 @@ export async function importProductionUsageUpdates(input: {
 
   const [byBatchResult, byDateResult] = await Promise.all([
     batchIds.length > 0
-      ? supabase
-          .from("production_usage")
-          .select(
-            "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
-          )
-          .eq("company_id", companyId)
-          .in("batch_id", batchIds)
+      ? (workspaceId
+          ? supabase
+              .from("production_usage")
+              .select(
+                "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
+              )
+              .eq("company_id", companyId)
+              .eq("workspace_id", workspaceId)
+              .in("batch_id", batchIds)
+          : supabase
+              .from("production_usage")
+              .select(
+                "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
+              )
+              .eq("company_id", companyId)
+              .in("batch_id", batchIds))
       : Promise.resolve({ data: [], error: null }),
     usageDates.length > 0
-      ? supabase
-          .from("production_usage")
-          .select(
-            "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
-          )
-          .eq("company_id", companyId)
-          .in("usage_date", usageDates)
+      ? (workspaceId
+          ? supabase
+              .from("production_usage")
+              .select(
+                "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
+              )
+              .eq("company_id", companyId)
+              .eq("workspace_id", workspaceId)
+              .in("usage_date", usageDates)
+          : supabase
+              .from("production_usage")
+              .select(
+                "id, batch_id, pipeline_id, stage_id, workspace_id, sku_id, quantity, usage_date, notes, status, updated_at"
+              )
+              .eq("company_id", companyId)
+              .in("usage_date", usageDates))
       : Promise.resolve({ data: [], error: null }),
   ])
 
@@ -2316,6 +2550,15 @@ export async function importProductionUsageUpdates(input: {
     }
 
     if (usageRow) {
+      // Imports may not bypass the allowed window, even for usage editors.
+      if (isOutsideUsageWindow(usageRow.usage_date, settings)) {
+        conflict(
+          lockedUsageDateMessage(usageRow.usage_date, settings),
+          usageRow
+        )
+        continue
+      }
+
       const lineKey = `${usageRow.batch_id}:${usageRow.sku_id ?? usageRow.id}`
       if (seen.has(lineKey)) {
         conflict("Duplicate row for the same batch and SKU.", usageRow)
@@ -2365,15 +2608,19 @@ export async function importProductionUsageUpdates(input: {
           continue
         }
 
-        const affectedIds = await expandBomComponentRows(supabase, companyId, [
+        const affectedIds = await expandBomComponentRows(supabase, companyId, workspaceId, [
           usageRow,
         ])
 
-        const { data: affectedRows, error: affectedError } = await supabase
+        let affectedUsageRowsQuery = supabase
           .from("production_usage")
           .select("id, batch_id, status")
           .eq("company_id", companyId)
           .in("id", Array.from(affectedIds))
+        if (workspaceId) {
+          affectedUsageRowsQuery = affectedUsageRowsQuery.eq("workspace_id", workspaceId)
+        }
+        const { data: affectedRows, error: affectedError } = await affectedUsageRowsQuery
 
         if (affectedError) {
           console.error(
@@ -2387,11 +2634,15 @@ export async function importProductionUsageUpdates(input: {
           continue
         }
 
-        const { error } = await supabase
+        let importCancelUpdateQuery = supabase
           .from("production_usage")
           .update({ status: "cancelled", updated_at: now })
           .eq("company_id", companyId)
           .in("id", Array.from(affectedIds))
+        if (workspaceId) {
+          importCancelUpdateQuery = importCancelUpdateQuery.eq("workspace_id", workspaceId)
+        }
+        const { error } = await importCancelUpdateQuery
 
         if (error) {
           console.error("[action:importProductionUsageUpdates]", error)
@@ -2452,6 +2703,10 @@ export async function importProductionUsageUpdates(input: {
         conflict("usage_date must use the YYYY-MM-DD format.", usageRow)
         continue
       }
+      if (isOutsideUsageWindow(usageDate, settings)) {
+        conflict(lockedUsageDateMessage(usageDate, settings), usageRow)
+        continue
+      }
 
       const notes = map.has("notes")
         ? cell(row, map, "notes") || null
@@ -2467,7 +2722,7 @@ export async function importProductionUsageUpdates(input: {
         !settings.allowDuplicates &&
         (dateChanged || usageRow.status === "cancelled")
       ) {
-        const { data: duplicateRows, error: duplicateError } = await supabase
+        let duplicateUsageQuery = supabase
           .from("production_usage")
           .select("id")
           .eq("company_id", companyId)
@@ -2477,6 +2732,10 @@ export async function importProductionUsageUpdates(input: {
           .neq("id", usageRow.id)
           .neq("status", "cancelled")
           .limit(1)
+        if (workspaceId) {
+          duplicateUsageQuery = duplicateUsageQuery.eq("workspace_id", workspaceId)
+        }
+        const { data: duplicateRows, error: duplicateError } = await duplicateUsageQuery
 
         if (duplicateError) {
           console.error(
@@ -2499,7 +2758,7 @@ export async function importProductionUsageUpdates(input: {
         }
       }
 
-      const { error } = await supabase
+      let importUsageUpdateQuery = supabase
         .from("production_usage")
         .update({
           quantity,
@@ -2510,6 +2769,10 @@ export async function importProductionUsageUpdates(input: {
         })
         .eq("id", usageRow.id)
         .eq("company_id", companyId)
+      if (workspaceId) {
+        importUsageUpdateQuery = importUsageUpdateQuery.eq("workspace_id", workspaceId)
+      }
+      const { error } = await importUsageUpdateQuery
 
       if (error) {
         console.error("[action:importProductionUsageUpdates]", error)
@@ -2553,6 +2816,10 @@ export async function importProductionUsageUpdates(input: {
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(resolvedDate)) {
       conflict("usage_date must use the YYYY-MM-DD format.")
+      continue
+    }
+    if (isOutsideUsageWindow(resolvedDate, settings)) {
+      conflict(lockedUsageDateMessage(resolvedDate, settings))
       continue
     }
     if (!resolvedStageId || !resolvedPipelineId) {

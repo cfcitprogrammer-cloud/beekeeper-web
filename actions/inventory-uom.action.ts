@@ -90,7 +90,7 @@ export async function updateInventoryUom(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data, error } = await supabase
+  let uomQuery = supabase
     .from("inventory_uoms")
     .update({
       name,
@@ -99,8 +99,10 @@ export async function updateInventoryUom(
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
-    .select("id")
-    .single()
+  if (workspaceId) {
+    uomQuery = uomQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data, error } = await uomQuery.select("id").single()
 
   if (error) {
     console.error("[action:updateInventoryUom]", error)
@@ -121,12 +123,15 @@ export async function deleteInventoryUom(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data: uom, error: readError } = await supabase
+  let uomReadQuery = supabase
     .from("inventory_uoms")
     .select("id, code")
     .eq("id", id)
     .eq("company_id", companyId)
-    .maybeSingle()
+  if (workspaceId) {
+    uomReadQuery = uomReadQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data: uom, error: readError } = await uomReadQuery.maybeSingle()
 
   if (readError) {
     console.error("[action:deleteInventoryUom]", readError)
@@ -134,11 +139,15 @@ export async function deleteInventoryUom(
   }
   if (!uom) return failure("Unit not found.")
 
-  const { count, error: usageError } = await supabase
+  let skuCountQuery = supabase
     .from("skus")
     .select("id", { count: "exact", head: true })
     .eq("company_id", companyId)
     .eq("uom", uom.code)
+  if (workspaceId) {
+    skuCountQuery = skuCountQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { count, error: usageError } = await skuCountQuery
 
   if (usageError) {
     console.error("[action:deleteInventoryUom]", usageError)
@@ -151,11 +160,15 @@ export async function deleteInventoryUom(
     )
   }
 
-  const { error } = await supabase
+  let deleteQuery = supabase
     .from("inventory_uoms")
     .delete()
     .eq("id", id)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    deleteQuery = deleteQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { error } = await deleteQuery
 
   if (error) {
     console.error("[action:deleteInventoryUom]", error)

@@ -15,6 +15,8 @@ export type ActionContext = {
   } | null
   companyId: string | null
   workspaceId: string | null
+  /** IANA timezone of the company (e.g. "Asia/Manila"). */
+  companyTimezone: string | null
   roleId: string | null
   roleName: string | null
   permissions: string[]
@@ -34,6 +36,7 @@ export async function getActionContext(): Promise<ActionContext> {
     employee: access.employee,
     companyId: access.companyId,
     workspaceId: access.workspaceId,
+    companyTimezone: access.company?.timezone ?? null,
     roleId: access.user?.roleId ?? null,
     roleName: access.user?.role ?? null,
     permissions: access.permissions,

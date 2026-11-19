@@ -544,10 +544,18 @@ export async function getProductionUsageSettings(): Promise<
   QueryResult<ProductionUsageSettings | null>
 > {
   const supabase = await createClient()
+  const access = await getAccessContext()
+  const companyId = access.companyId
+
+  // Settings are stored once per company. Without the company filter a user
+  // who belongs to more than one company could load another company's row,
+  // making saves appear to have no effect.
+  if (!companyId) return empty(null)
+
   const { data, error } = await supabase
     .from("production_usage_settings")
     .select("*")
-    .limit(1)
+    .eq("company_id", companyId)
     .maybeSingle()
 
   logError("production-usage-settings", error)

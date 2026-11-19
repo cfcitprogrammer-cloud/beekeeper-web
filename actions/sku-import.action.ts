@@ -211,10 +211,16 @@ export async function importSkuCatalog(input: {
             .from("sku_categories")
             .select("id, name")
             .eq("company_id", companyId),
-      supabase
-        .from("inventory_uoms")
-        .select("id, code")
-        .eq("company_id", companyId),
+      workspaceId
+        ? supabase
+            .from("inventory_uoms")
+            .select("id, code")
+            .eq("company_id", companyId)
+            .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+        : supabase
+            .from("inventory_uoms")
+            .select("id, code")
+            .eq("company_id", companyId),
       workspaceId
         ? supabase
             .from("inventory_warehouses")
@@ -249,7 +255,12 @@ export async function importSkuCatalog(input: {
 
   const skuByCode = new Map<string, SkuRow>()
   for (const sku of (skusResult.data ?? []) as SkuRow[]) {
-    skuByCode.set(sku.sku_code.trim().toUpperCase(), sku)
+    if (!isWorkspaceVisible(workspaceId, sku.workspace_id)) continue
+    const key = sku.sku_code.trim().toUpperCase()
+    const existing = skuByCode.get(key)
+    if (!existing || sku.workspace_id === workspaceId) {
+      skuByCode.set(key, sku)
+    }
   }
 
   const categoryByName = new Map<string, string>()
@@ -562,15 +573,28 @@ export async function importSkuBom(input: {
 
   const skuByCode = new Map<string, BomSkuRow>()
   for (const sku of (skusResult.data ?? []) as BomSkuRow[]) {
-    skuByCode.set(sku.sku_code.trim().toUpperCase(), sku)
+    const key = sku.sku_code.trim().toUpperCase()
+    const existing = skuByCode.get(key)
+    if (
+      !existing ||
+      (isWorkspaceVisible(workspaceId, sku.workspace_id) &&
+        !isWorkspaceVisible(workspaceId, existing.workspace_id))
+    ) {
+      skuByCode.set(key, sku)
+    }
   }
 
   const componentByPair = new Map<string, ComponentRow>()
   for (const component of (componentsResult.data ?? []) as ComponentRow[]) {
-    componentByPair.set(
-      `${component.parent_sku_id}:${component.component_sku_id}`,
-      component
-    )
+    const key = `${component.parent_sku_id}:${component.component_sku_id}`
+    const existing = componentByPair.get(key)
+    if (
+      !existing ||
+      (isWorkspaceVisible(workspaceId, component.workspace_id) &&
+        !isWorkspaceVisible(workspaceId, existing.workspace_id))
+    ) {
+      componentByPair.set(key, component)
+    }
   }
 
   const result: SkuBomImportResult = {

@@ -34,6 +34,20 @@ export async function addSkuComponent(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
+  for (const skuId of [input.parentSkuId, input.componentSkuId]) {
+    let skuQuery = supabase
+      .from("skus")
+      .select("id, workspace_id")
+      .eq("id", skuId)
+      .eq("company_id", companyId)
+    if (workspaceId) {
+      skuQuery = skuQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    }
+    const { data: sku, error: skuError } = await skuQuery.maybeSingle()
+    if (skuError) return failure(skuError.message)
+    if (!sku) return failure("One or more SKUs are not available in this workspace.")
+  }
+
   const { data, error } = await supabase
     .from("sku_components")
     .insert({
@@ -71,13 +85,17 @@ export async function updateSkuComponentQuantity(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data, error } = await supabase
+  let updateQuery = supabase
     .from("sku_components")
     .update({ quantity })
     .eq("id", id)
     .eq("company_id", companyId)
-    .select("id")
-    .single()
+  if (workspaceId) {
+    updateQuery = updateQuery.or(
+      `workspace_id.is.null,workspace_id.eq.${workspaceId}`
+    )
+  }
+  const { data, error } = await updateQuery.select("id").single()
 
   if (error) {
     console.error("[action:updateSkuComponentQuantity]", error)
@@ -98,11 +116,17 @@ export async function removeSkuComponent(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { error } = await supabase
+  let deleteQuery = supabase
     .from("sku_components")
     .delete()
     .eq("id", id)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    deleteQuery = deleteQuery.or(
+      `workspace_id.is.null,workspace_id.eq.${workspaceId}`
+    )
+  }
+  const { error } = await deleteQuery
 
   if (error) {
     console.error("[action:removeSkuComponent]", error)

@@ -44,7 +44,10 @@ export default async function MyProductionUsagePage() {
         canRecord={canRecord}
         canManage={canManage}
         recordHref="/production/usage/new"
-        settings={toUsageSettings(settingsResult.data)}
+        settings={toUsageSettings(
+          settingsResult.data,
+          access.company?.timezone
+        )}
         currentUserId={access.user?.id ?? null}
         now={new Date().toISOString()}
       />

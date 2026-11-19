@@ -111,9 +111,9 @@ export async function updateInventoryWarehouse(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_UPDATE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data, error } = await supabase
+  let warehouseQuery = supabase
     .from("inventory_warehouses")
     .update({
       ...cleanFields({ ...input, name }),
@@ -121,8 +121,12 @@ export async function updateInventoryWarehouse(
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
-    .select("id")
-    .single()
+  if (workspaceId) {
+    warehouseQuery = warehouseQuery.or(
+      `workspace_id.is.null,workspace_id.eq.${workspaceId}`
+    )
+  }
+  const { data, error } = await warehouseQuery.select("id").single()
 
   if (error) {
     console.error("[action:updateInventoryWarehouse]", error)
@@ -141,14 +145,19 @@ export async function deleteInventoryWarehouse(
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data: warehouse, error: readError } = await supabase
+  let warehouseReadQuery = supabase
     .from("inventory_warehouses")
     .select("id, code")
     .eq("id", id)
     .eq("company_id", companyId)
-    .maybeSingle()
+  if (workspaceId) {
+    warehouseReadQuery = warehouseReadQuery.or(
+      `workspace_id.is.null,workspace_id.eq.${workspaceId}`
+    )
+  }
+  const { data: warehouse, error: readError } = await warehouseReadQuery.maybeSingle()
 
   if (readError) {
     console.error("[action:deleteInventoryWarehouse]", readError)
@@ -156,11 +165,15 @@ export async function deleteInventoryWarehouse(
   }
   if (!warehouse) return failure("Warehouse not found.")
 
-  const { count, error: usageError } = await supabase
+  let skuCountQuery = supabase
     .from("skus")
     .select("id", { count: "exact", head: true })
     .eq("company_id", companyId)
     .eq("production_warehouse_id", id)
+  if (workspaceId) {
+    skuCountQuery = skuCountQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { count, error: usageError } = await skuCountQuery
 
   if (usageError) {
     console.error("[action:deleteInventoryWarehouse]", usageError)
@@ -173,12 +186,16 @@ export async function deleteInventoryWarehouse(
     )
   }
 
-  const { count: stockCount, error: stockError } = await supabase
+  let stockCountQuery = supabase
     .from("warehouse_stock")
     .select("id", { count: "exact", head: true })
     .eq("company_id", companyId)
     .eq("warehouse_id", id)
     .gt("quantity", 0)
+  if (workspaceId) {
+    stockCountQuery = stockCountQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { count: stockCount, error: stockError } = await stockCountQuery
 
   if (stockError) {
     console.error("[action:deleteInventoryWarehouse]", stockError)
@@ -191,11 +208,15 @@ export async function deleteInventoryWarehouse(
     )
   }
 
-  const { count: movementCount, error: movementError } = await supabase
+  let movementCountQuery = supabase
     .from("warehouse_stock_movements")
     .select("id", { count: "exact", head: true })
     .eq("company_id", companyId)
     .eq("warehouse_id", id)
+  if (workspaceId) {
+    movementCountQuery = movementCountQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { count: movementCount, error: movementError } = await movementCountQuery
 
   if (movementError) {
     console.error("[action:deleteInventoryWarehouse]", movementError)
@@ -208,11 +229,15 @@ export async function deleteInventoryWarehouse(
     )
   }
 
-  const { error } = await supabase
+  let deleteQuery = supabase
     .from("inventory_warehouses")
     .delete()
     .eq("id", id)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    deleteQuery = deleteQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { error } = await deleteQuery
 
   if (error) {
     console.error("[action:deleteInventoryWarehouse]", error)

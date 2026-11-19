@@ -55,10 +55,11 @@ import type {
 } from "@/lib/data/operations"
 import type { ProductionPipeline } from "@/types/database"
 import {
-  cutoffInstant,
+  isOutsideUsageWindow,
   normalizeTime,
   resolveUsageStatus,
   usageStatusLabel,
+  usageWindow,
   type UsageSettings,
 } from "@/lib/production/usage-status"
 
@@ -292,7 +293,7 @@ export function ProductionUsageEditorGrid({
   ).length
   const selectedActive = selectedRows.length - selectedCancelled
 
-  const cutoff = cutoffInstant(settings, nowDate)
+  const allowedWindow = usageWindow(settings, nowDate)
   const isSubmitterOfSelection =
     Boolean(currentUserId) &&
     selectedRows.length > 0 &&
@@ -327,6 +328,7 @@ export function ProductionUsageEditorGrid({
     value: string
   ) {
     if (statusOf(row) === "cancelled") return
+    if (isOutsideUsageWindow(row.usage_date, settings, nowDate)) return
     setDrafts((current) => {
       const next = {
         ...(current[row.id] ?? originalDraft(row)),
@@ -403,6 +405,23 @@ export function ProductionUsageEditorGrid({
     const missingDate = lines.find((line) => !line.usageDate)
     if (missingDate) {
       toast.add({ type: "error", title: "Select a usage date for every row" })
+      return
+    }
+
+    const lockedLine = lines.find((line) => {
+      const row = usage.find((item) => item.id === line.id)
+      return (
+        !row ||
+        isOutsideUsageWindow(row.usage_date, settings, nowDate) ||
+        isOutsideUsageWindow(line.usageDate, settings, nowDate)
+      )
+    })
+    if (lockedLine) {
+      toast.add({
+        type: "error",
+        title: "Usage date is locked",
+        description: `Only ${allowedWindow.start} through ${allowedWindow.end} can be submitted, edited or cancelled.`,
+      })
       return
     }
 
@@ -730,13 +749,18 @@ export function ProductionUsageEditorGrid({
             Critical module — changes affect production records
           </p>
           <p className="text-[0.6875rem] opacity-90">
-            Usage lines dated on or before{" "}
-            <span className="font-medium">{formatDate(cutoff)}</span> are
-            completed at{" "}
-            <span className="font-medium">{normalizeTime(settings.cutoffTime)}</span>{" "}
-            and can no longer be edited by submitters. You are editing as a
-            usage editor, so completed usage stays editable — but every change
-            is recorded in the usage changelog.
+            Usage can only be submitted, edited or cancelled for{" "}
+            <span className="font-medium">
+              {formatDate(allowedWindow.startDate)} –{" "}
+              {formatDate(allowedWindow.endDate)}
+            </span>
+            . The day rolls over at{" "}
+            <span className="font-medium">
+              {normalizeTime(settings.cutoffTime)}
+            </span>
+            . Exactly like submitters, usage editors and administrators cannot
+            change lines outside that window — but every change is recorded in
+            the usage changelog.
           </p>
         </div>
       </div>
@@ -1084,6 +1108,11 @@ export function ProductionUsageEditorGrid({
               {pagedRows.map((row, index) => {
                 const status = statusOf(row)
                 const cancelled = status === "cancelled"
+                const locked = isOutsideUsageWindow(
+                  row.usage_date,
+                  settings,
+                  nowDate
+                )
                 const draft = drafts[row.id]
                 const value = draft ?? originalDraft(row)
                 const dirty = Boolean(draft)

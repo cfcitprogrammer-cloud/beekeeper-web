@@ -8,7 +8,7 @@ import { getProductionUsageSettings } from "@/lib/data/operations"
 import { toUsageSettings } from "@/lib/production/usage-status"
 
 export default async function ProductionUsageSettingsPage() {
-  const [, settingsResult] = await Promise.all([
+  const [access, settingsResult] = await Promise.all([
     requirePermission(PERMISSIONS.PRODUCTION_EDITOR),
     getProductionUsageSettings(),
   ])
@@ -21,7 +21,13 @@ export default async function ProductionUsageSettingsPage() {
         description="Control the cutoff window, submitter edits, cancellations and duplicate submissions for production usage."
         icon={Settings2}
       />
-      <UsageSettingsForm settings={toUsageSettings(settingsResult.data)} />
+      <UsageSettingsForm
+        key={`${access.company?.timezone ?? ""}:${settingsResult.data?.updated_at ?? "default"}`}
+        settings={toUsageSettings(
+          settingsResult.data,
+          access.company?.timezone
+        )}
+      />
     </div>
   )
 }

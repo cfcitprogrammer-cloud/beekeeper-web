@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, FlaskConical, Plus, Trash2, UserRound } from "lucide-react"
+import { ArrowLeft, FlaskConical, Plus, Trash2 } from "lucide-react"
 
 import { createProductionUsage } from "@/actions/production.action"
 import { SkuCombobox } from "@/components/production/sku-combobox"
@@ -12,7 +12,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "@/components/ui/toast"
-import { formatNumber } from "@/lib/format"
+import { formatDate, formatNumber } from "@/lib/format"
+import {
+  isOutsideUsageWindow,
+  normalizeTime,
+  usageDateIssue,
+  usageWindow,
+  type UsageSettings,
+} from "@/lib/production/usage-status"
 import type {
   ProductionPipelineWithRelations,
   ProductionStageWithRelations,
@@ -29,11 +36,13 @@ export function UsageForm({
   stages,
   defaultPipelineId,
   defaultDate,
+  settings,
 }: {
   pipelines: ProductionPipelineWithRelations[]
   stages: ProductionStageWithRelations[]
   defaultPipelineId?: string
   defaultDate: string
+  settings: UsageSettings
 }) {
   const router = useRouter()
   const lineCounter = React.useRef(0)
@@ -45,6 +54,11 @@ export function UsageForm({
   ])
   const [usageDate, setUsageDate] = React.useState(defaultDate)
   const [notes, setNotes] = React.useState("")
+
+  const window = usageWindow(settings)
+  const beyondCutoff = Boolean(usageDate) && isOutsideUsageWindow(usageDate, settings)
+  const dateIssue = usageDate ? usageDateIssue(usageDate, settings) : null
+  const cutoffTime = normalizeTime(settings.cutoffTime)
 
   function nextLine(): UsageLine {
     lineCounter.current += 1
@@ -595,8 +609,23 @@ export function UsageForm({
               id="usage-date"
               type="date"
               value={usageDate}
+              min={window.start}
+              max={window.end}
               onChange={(event) => setUsageDate(event.target.value)}
             />
+            {beyondCutoff ? (
+              <p className="text-[0.625rem] text-destructive">
+                {dateIssue === "past"
+                  ? "This date is older than the allowed window and is locked."
+                  : "This date is after the allowed window and is locked."}{" "}
+                Use {formatDate(window.startDate)} – {formatDate(window.endDate)}.
+              </p>
+            ) : (
+              <p className="text-[0.625rem] text-muted-foreground">
+                Usage can be recorded for {formatDate(window.startDate)} –{" "}
+                {formatDate(window.endDate)}. The day rolls over at {cutoffTime}.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -620,7 +649,9 @@ export function UsageForm({
           </Button>
           <Button
             onClick={save}
-            disabled={saving || !selectedStage || !usageDate}
+            disabled={
+              saving || !selectedStage || !usageDate || beyondCutoff
+            }
           >
             <FlaskConical />
             {saving ? "Recording…" : "Record usage"}

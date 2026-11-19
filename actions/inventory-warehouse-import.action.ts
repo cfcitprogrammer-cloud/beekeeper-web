@@ -76,9 +76,24 @@ export async function importInventoryWarehouses(input: {
     return failure(existingError.message)
   }
 
+  /** A company-wide row (no workspace) is visible everywhere. */
+  function isWorkspaceVisible(rowWorkspaceId: string | null) {
+    if (!workspaceId) return true
+    return rowWorkspaceId === null || rowWorkspaceId === workspaceId
+  }
+  function isCrossWorkspace(rowWorkspaceId: string | null) {
+    if (!workspaceId) return false
+    return rowWorkspaceId !== null && rowWorkspaceId !== workspaceId
+  }
+
   const byCode = new Map<string, (typeof existingData)[number]>()
   for (const warehouse of existingData ?? []) {
-    byCode.set(warehouse.code.trim().toUpperCase(), warehouse)
+    if (!isWorkspaceVisible(warehouse.workspace_id)) continue
+    const key = warehouse.code.trim().toUpperCase()
+    const existing = byCode.get(key)
+    if (!existing || warehouse.workspace_id === workspaceId) {
+      byCode.set(key, warehouse)
+    }
   }
 
   const result: WarehouseImportResult = { created: 0, updated: 0, errors: [] }
@@ -102,6 +117,13 @@ export async function importInventoryWarehouses(input: {
     }
 
     const existing = byCode.get(code)
+    if (existing && isCrossWorkspace(existing.workspace_id)) {
+      result.errors.push({
+        row: rowNumber,
+        message: `A warehouse with the code “${code}” belongs to another workspace and cannot be imported here.`,
+      })
+      continue
+    }
     const address = cell(row, map, "address")
     const contactPerson = cell(row, map, "contact_person")
     const phone = cell(row, map, "phone")

@@ -35,17 +35,21 @@ export type UpdateSkuInput = CreateSkuInput & { id: string }
 async function resolveUom(
   supabase: AuthorizedActionContext["supabase"],
   companyId: string,
+  workspaceId: string | null,
   input: Pick<CreateSkuInput, "uom" | "uomId">
 ): Promise<
   { ok: true; uom: string; uomId: string | null } | { ok: false; error: string }
 > {
   if (input.uomId) {
-    const { data, error } = await supabase
+    let uomQuery = supabase
       .from("inventory_uoms")
       .select("id, code")
       .eq("id", input.uomId)
       .eq("company_id", companyId)
-      .maybeSingle()
+    if (workspaceId) {
+      uomQuery = uomQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    }
+    const { data, error } = await uomQuery.maybeSingle()
 
     if (error) {
       console.error("[action:resolveUom]", error)
@@ -61,12 +65,15 @@ async function resolveUom(
   const code = input.uom?.trim().toUpperCase() ?? ""
   if (!code) return { ok: false, error: "Unit of measure is required." }
 
-  const { data } = await supabase
+  let uomCodeQuery = supabase
     .from("inventory_uoms")
     .select("id")
     .eq("company_id", companyId)
     .eq("code", code)
-    .maybeSingle()
+  if (workspaceId) {
+    uomCodeQuery = uomCodeQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data } = await uomCodeQuery.maybeSingle()
 
   return { ok: true, uom: code, uomId: data?.id ?? null }
 }
@@ -124,7 +131,7 @@ export async function updateSku(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const uomResult = await resolveUom(supabase, companyId, input)
+  const uomResult = await resolveUom(supabase, companyId, workspaceId, input)
   if (!uomResult.ok) return failure(uomResult.error)
 
   const warehouseResult = await resolveProductionWarehouse(
@@ -135,7 +142,7 @@ export async function updateSku(
   )
   if (!warehouseResult.ok) return failure(warehouseResult.error)
 
-  const { data, error } = await supabase
+  let skuUpdateQuery = supabase
     .from("skus")
     .update({
       sku_code: input.skuCode.trim().toUpperCase(),
@@ -152,8 +159,10 @@ export async function updateSku(
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
-    .select("id")
-    .single()
+  if (workspaceId) {
+    skuUpdateQuery = skuUpdateQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { data, error } = await skuUpdateQuery.select("id").single()
 
   if (error) {
     console.error("[action:updateSku]", error)
@@ -171,13 +180,17 @@ export async function deleteSku(id: string): Promise<ActionResult<{ id: string }
   const authorized = await getAuthorizedContext(PERMISSIONS.INVENTORY_DELETE)
   if ("error" in authorized) return authorized.error
 
-  const { supabase, companyId } = authorized.context
+  const { supabase, companyId, workspaceId } = authorized.context
 
-  const { error } = await supabase
+  let skuDeleteQuery = supabase
     .from("skus")
     .delete()
     .eq("id", id)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    skuDeleteQuery = skuDeleteQuery.or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+  }
+  const { error } = await skuDeleteQuery
 
   if (error) {
     console.error("[action:deleteSku]", error)
@@ -201,7 +214,7 @@ export async function createSku(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const uomResult = await resolveUom(supabase, companyId, input)
+  const uomResult = await resolveUom(supabase, companyId, workspaceId, input)
   if (!uomResult.ok) return failure(uomResult.error)
 
   const warehouseResult = await resolveProductionWarehouse(

@@ -36,6 +36,12 @@ All notable changes to this project are documented here. Entries are grouped by 
 ### Production usage settings (`/production/usage-settings`)
 - New configuration module guarded by `production.editor`: cutoff days, cutoff time, allow submitter edit, allow duplicates.
 - Sidebar, global search, breadcrumb, and route-permission entries added.
+- Settings are now loaded for the signed-in user's company, so users who belong to more than one company always see (and edit) the values for the company they saved.
+- The cutoff is evaluated in the company's timezone (`companies.timezone`) on both the server and the client, so a “10:25” cutoff no longer fires eight hours late on a UTC server for an `Asia/Manila` company.
+- The cutoff now blocks new usage submissions for dates past the cutoff unless the user is a usage editor; usage editors can still backfill and correct completed entries.
+- Submitters can no longer move an in-window line to a date that is past the cutoff.
+- The usage date on the record form defaults to today in the company timezone (not the server's UTC date) and shows when the selected date is locked.
+- The settings form shows the company timezone next to the cutoff time and remounts after a save so the server's normalized values are always displayed.
 
 ### Usage audit trail
 - New `production_usage_changelog` table records `created`, `updated`, `cancelled`, `restored`, `import`, `submitter_updated`, and `submitter_cancelled` actions with previous/new values, actor, timestamp, and reason.

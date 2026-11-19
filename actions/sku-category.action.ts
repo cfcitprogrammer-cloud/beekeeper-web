@@ -58,7 +58,7 @@ export async function updateSkuCategory(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { data, error } = await supabase
+  let categoryQuery = supabase
     .from("sku_categories")
     .update({
       name: input.name.trim(),
@@ -66,8 +66,12 @@ export async function updateSkuCategory(
     })
     .eq("id", input.id)
     .eq("company_id", companyId)
-    .select("id")
-    .single()
+  if (workspaceId) {
+    categoryQuery = categoryQuery.or(
+      `workspace_id.is.null,workspace_id.eq.${workspaceId}`
+    )
+  }
+  const { data, error } = await categoryQuery.select("id").single()
 
   if (error) {
     console.error("[action:updateSkuCategory]", error)
@@ -89,11 +93,17 @@ export async function deleteSkuCategory(
 
   const { supabase, companyId, workspaceId } = authorized.context
 
-  const { error } = await supabase
+  let deleteQuery = supabase
     .from("sku_categories")
     .delete()
     .eq("id", id)
     .eq("company_id", companyId)
+  if (workspaceId) {
+    deleteQuery = deleteQuery.or(
+      `workspace_id.is.null,workspace_id.eq.${workspaceId}`
+    )
+  }
+  const { error } = await deleteQuery
 
   if (error) {
     console.error("[action:deleteSkuCategory]", error)

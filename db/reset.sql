@@ -29,6 +29,7 @@
 --   db/migrations/20261122_workspace_scoping.sql
 --   db/migrations/20261123_inventory_warehouses.sql
 --   db/migrations/20261124_warehouse_stock.sql
+--   db/migrations/20261125_workspace_unique_codes.sql
 --   db/seed/super_admin.sql
 --   db/seed/rls_policies.sql        (optional)
 --   db/seed/storage.sql             (optional, once per project)

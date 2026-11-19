@@ -34,8 +34,10 @@ import {
 } from "@/lib/production/usage"
 import {
   canSubmitterEditUsage,
+  isOutsideUsageWindow,
   resolveUsageStatus,
   usageStatusLabel,
+  usageWindow,
   type UsageSettings,
 } from "@/lib/production/usage-status"
 
@@ -70,6 +72,7 @@ export function UsageManager({
 }) {
   const router = useRouter()
   const nowDate = React.useMemo(() => new Date(now), [now])
+  const window = usageWindow(settings, nowDate)
   const batches = React.useMemo(() => groupProductionUsage(usage), [usage])
 
   const [viewing, setViewing] = React.useState<ProductionUsageBatch | null>(null)
@@ -110,15 +113,23 @@ export function UsageManager({
       batch.items.every((item) =>
         canSubmitterEditUsage(item, settings, currentUserId, nowDate)
       )
+    // The date window locks every user, including usage editors. A batch is
+    // only editable while all of its lines sit inside the window.
+    const withinWindow = batch.items.every(
+      (item) => !isOutsideUsageWindow(item.usage_date, settings, nowDate)
+    )
 
     return {
       cancelled,
       active,
       owned,
       submitterEditable,
-      canEdit: active > 0 && (canManage || submitterEditable),
-      canCancel: active > 0 && (canManage || submitterEditable),
-      canRestore: canManage && cancelled > 0,
+      withinWindow,
+      canEdit:
+        withinWindow && active > 0 && (canManage || submitterEditable),
+      canCancel:
+        withinWindow && active > 0 && (canManage || submitterEditable),
+      canRestore: withinWindow && canManage && cancelled > 0,
     }
   }
 
@@ -166,6 +177,14 @@ export function UsageManager({
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.usageDate)) {
       toast.add({ type: "error", title: "Select a valid usage date" })
+      return
+    }
+    if (isOutsideUsageWindow(draft.usageDate, settings, nowDate)) {
+      toast.add({
+        type: "error",
+        title: "Usage date is locked",
+        description: `Only ${window.start} through ${window.end} can be submitted, edited or cancelled.`,
+      })
       return
     }
 
@@ -622,11 +641,7 @@ export function UsageManager({
           editing
             ? `${editing.pipeline?.name ?? "Pipeline"} · ${
                 editing.stage?.name ?? "Stage"
-              } · ${editing.items.length} SKU line(s).${
-                canManage
-                  ? " As a usage editor you can correct completed usage; every change is recorded in the changelog."
-                  : " You can edit until the cutoff, then an administrator must correct it."
-              }`
+              } · ${editing.items.length} SKU line(s). Only usage dates inside the allowed date window can be edited.`
             : undefined
         }
         footer={
@@ -678,6 +693,8 @@ export function UsageManager({
                   id="own-usage-date"
                   type="date"
                   value={draft.usageDate}
+                  min={window.start}
+                  max={window.end}
                   onChange={(event) =>
                     setDraft((current) => ({
                       ...current,
@@ -750,8 +767,8 @@ export function UsageManager({
 
             <p className="text-[0.625rem] text-muted-foreground">
               {canManage
-                ? "Usage editors can correct any active line. Cancelled lines stay read-only until they are restored."
-                : "Editing is limited to your own submitted usage inside the cutoff window."}{" "}
+                ? "Usage editors are held to the same date window as everyone else. Cancelled lines stay read-only until they are restored."
+                : "Editing is limited to your own submitted usage inside the allowed date window."}{" "}
               Every change is recorded in the usage changelog.
             </p>
           </div>

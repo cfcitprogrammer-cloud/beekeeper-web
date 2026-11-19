@@ -43,6 +43,7 @@ export function UsageSettingsForm({
     cutoffTime: normalizeTime(draft.cutoffTime || "17:00"),
     allowSubmitterEdit: draft.allowSubmitterEdit,
     allowDuplicates: draft.allowDuplicates,
+    timeZone: settings.timeZone,
   }
   const cutoff = cutoffInstant(previewSettings)
 
@@ -131,7 +132,9 @@ export function UsageSettingsForm({
                 }
               />
               <p className="text-[0.625rem] text-muted-foreground">
-                Local company time. Usage becomes read-only at this time.
+                Local company time
+                {settings.timeZone ? ` (${settings.timeZone})` : ""}. Usage
+                becomes read-only at this time.
               </p>
             </div>
           </div>

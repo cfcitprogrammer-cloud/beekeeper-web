@@ -39,7 +39,10 @@ export default async function ProductionUsagePage() {
         usage={usageResult.data}
         canRecord={canRecord}
         canManage={canManage}
-        settings={toUsageSettings(settingsResult.data)}
+        settings={toUsageSettings(
+          settingsResult.data,
+          access.company?.timezone
+        )}
         currentUserId={access.user?.id ?? null}
         now={new Date().toISOString()}
       />

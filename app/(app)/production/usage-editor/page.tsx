@@ -34,7 +34,10 @@ export default async function ProductionUsageEditorPage() {
         pipelines={pipelinesResult.data}
         stages={stagesResult.data}
         usage={usageResult.data}
-        settings={toUsageSettings(settingsResult.data)}
+        settings={toUsageSettings(
+          settingsResult.data,
+          access.company?.timezone
+        )}
         currentUserId={access.user?.id ?? null}
         now={new Date().toISOString()}
       />

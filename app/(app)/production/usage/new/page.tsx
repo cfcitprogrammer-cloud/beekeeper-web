@@ -4,22 +4,24 @@ import { UsageForm } from "@/components/production/usage-form"
 import { PageHeader } from "@/components/shared/page-header"
 import { requireAnyPermission } from "@/lib/auth/guards"
 import { PERMISSIONS } from "@/lib/auth/permissions"
-import { getProductionPipelines, getProductionStages } from "@/lib/data/operations"
+import { getProductionPipelines, getProductionStages, getProductionUsageSettings } from "@/lib/data/operations"
+import { todayInTimeZone, toUsageSettings } from "@/lib/production/usage-status"
 
 export default async function NewProductionUsagePage({
   searchParams,
 }: {
   searchParams: Promise<{ pipelineId?: string }>
 }) {
-  await requireAnyPermission([
+  const access = await requireAnyPermission([
     PERMISSIONS.PRODUCTION_CREATE,
     PERMISSIONS.PRODUCTION_UPDATE,
   ])
 
   const { pipelineId } = await searchParams
-  const [pipelinesResult, stagesResult] = await Promise.all([
+  const [pipelinesResult, stagesResult, settingsResult] = await Promise.all([
     getProductionPipelines(),
     getProductionStages(),
+    getProductionUsageSettings(),
   ])
 
   return (
@@ -35,7 +37,11 @@ export default async function NewProductionUsagePage({
         pipelines={pipelinesResult.data}
         stages={stagesResult.data}
         defaultPipelineId={pipelineId}
-        defaultDate={new Date().toISOString().slice(0, 10)}
+        defaultDate={todayInTimeZone(access.company?.timezone)}
+        settings={toUsageSettings(
+          settingsResult.data,
+          access.company?.timezone
+        )}
       />
     </div>
   )
