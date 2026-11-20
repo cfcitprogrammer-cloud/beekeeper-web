@@ -540,6 +540,159 @@ export async function getProductionUsage(
   )
 }
 
+export type ProductionUsageBreakdownRow = {
+  skuId: string | null
+  skuCode: string
+  description: string
+  uom: string | null
+  quantity: number
+}
+
+export type ProductionUsageBreakdownStage = Pick<
+  ProductionStage,
+  "id" | "name" | "sequence" | "stage_type"
+> & {
+  rows: ProductionUsageBreakdownRow[]
+}
+
+export type ProductionUsageBreakdown = {
+  pipeline: Pick<
+    ProductionPipeline,
+    "id" | "name" | "code" | "description"
+  >
+  usageDate: string
+  stages: ProductionUsageBreakdownStage[]
+  totalRows: number
+}
+
+/**
+ * Usage for one pipeline and one usage date, grouped by stage and SKU.
+ *
+ * Every stage in the pipeline is returned, even when it has no usage for the
+ * date, so the breakdown table always mirrors the pipeline's stage sequence.
+ * Cancelled usage lines are excluded; repeated lines for the same SKU and
+ * stage are summed into a single row. Everything is scoped to the active
+ * workspace.
+ */
+export async function getProductionUsageBreakdown(
+  pipelineId: string,
+  usageDate: string
+): Promise<QueryResult<ProductionUsageBreakdown | null>> {
+  const supabase = await createClient()
+  const access = await getAccessContext()
+  const workspaceId = access.workspaceId
+
+  if (!workspaceId || !pipelineId || !/^\d{4}-\d{2}-\d{2}$/.test(usageDate)) {
+    return empty(null)
+  }
+
+  const [pipelineResult, stagesResult, usageResult] = await Promise.all([
+    supabase
+      .from("production_pipelines")
+      .select("id,name,code,description")
+      .eq("id", pipelineId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+    supabase
+      .from("production_stages")
+      .select("id,name,sequence,stage_type")
+      .eq("pipeline_id", pipelineId)
+      .order("sequence"),
+    supabase
+      .from("production_usage")
+      .select("stage_id,sku_id,quantity,uom")
+      .eq("workspace_id", workspaceId)
+      .eq("pipeline_id", pipelineId)
+      .eq("usage_date", usageDate)
+      .neq("status", "cancelled"),
+  ])
+
+  logError("production-breakdown-pipeline", pipelineResult.error)
+  logError("production-breakdown-stages", stagesResult.error)
+  logError("production-breakdown-usage", usageResult.error)
+  if (pipelineResult.error || !pipelineResult.data) return empty(null)
+
+  const usageRows = (usageResult.data ?? []) as Array<{
+    stage_id: string
+    sku_id: string | null
+    quantity: number
+    uom: string | null
+  }>
+
+  const skuIds = [
+    ...new Set(
+      usageRows
+        .map((row) => row.sku_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ]
+
+  const skusResult = skuIds.length
+    ? await supabase
+        .from("skus")
+        .select("id,sku_code,name,uom")
+        .in("id", skuIds)
+        .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    : { data: [], error: null }
+
+  logError("production-breakdown-skus", skusResult.error)
+
+  const skus = new Map(
+    (
+      (skusResult.data ?? []) as Array<
+        Pick<Sku, "id" | "sku_code" | "name" | "uom">
+      >
+    ).map((sku) => [sku.id, sku])
+  )
+
+  // stage_id -> sku key -> accumulated quantity
+  const totals = new Map<
+    string,
+    Map<string, { quantity: number; uom: string | null }>
+  >()
+  for (const row of usageRows) {
+    const bySku = totals.get(row.stage_id) ?? new Map()
+    const key = row.sku_id ?? "__no_sku__"
+    const current = bySku.get(key) ?? { quantity: 0, uom: row.uom }
+    current.quantity += Number(row.quantity) || 0
+    if (!current.uom && row.uom) current.uom = row.uom
+    bySku.set(key, current)
+    totals.set(row.stage_id, bySku)
+  }
+
+  const stages = (
+    (stagesResult.data ?? []) as Array<
+      Pick<ProductionStage, "id" | "name" | "sequence" | "stage_type">
+    >
+  ).map<ProductionUsageBreakdownStage>((stage) => {
+    const bySku = totals.get(stage.id) ?? new Map()
+    const rows = [...bySku.entries()]
+      .map<ProductionUsageBreakdownRow>(([skuId, total]) => {
+        const sku = skuId === "__no_sku__" ? null : skus.get(skuId)
+        return {
+          skuId: skuId === "__no_sku__" ? null : skuId,
+          skuCode: sku?.sku_code ?? "—",
+          description: sku?.name ?? "Legacy run usage",
+          uom: total.uom ?? sku?.uom ?? null,
+          quantity: total.quantity,
+        }
+      })
+      .sort((a, b) => a.skuCode.localeCompare(b.skuCode))
+
+    return { ...stage, rows }
+  })
+
+  return empty({
+    pipeline: pipelineResult.data as Pick<
+      ProductionPipeline,
+      "id" | "name" | "code" | "description"
+    >,
+    usageDate,
+    stages,
+    totalRows: stages.reduce((count, stage) => count + stage.rows.length, 0),
+  })
+}
+
 export async function getProductionUsageSettings(): Promise<
   QueryResult<ProductionUsageSettings | null>
 > {

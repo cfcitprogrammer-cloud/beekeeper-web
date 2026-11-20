@@ -73,6 +73,7 @@ const quickLinks = [
   { title: "Production stages", href: "/production/stages", icon: Layers, group: "Field operations" },
   { title: "My production usage", href: "/production/usage/my", icon: FlaskConical, group: "Field operations" },
   { title: "All production usage", href: "/production/usage", icon: FlaskConical, group: "Field operations" },
+  { title: "Usage breakdown", href: "/production/usage-breakdown", icon: Table2, group: "Field operations" },
   { title: "Usage editor", href: "/production/usage-editor", icon: Table2, group: "Field operations" },
   { title: "Usage settings", href: "/production/usage-settings", icon: Settings2, group: "Field operations" },
   { title: "SKU catalog", href: "/inventory/skus", icon: Package, group: "Field operations" },

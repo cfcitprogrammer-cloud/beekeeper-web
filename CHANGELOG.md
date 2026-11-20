@@ -43,6 +43,11 @@ All notable changes to this project are documented here. Entries are grouped by 
 - The usage date on the record form defaults to today in the company timezone (not the server's UTC date) and shows when the selected date is locked.
 - The settings form shows the company timezone next to the cutoff time and remounts after a save so the server's normalized values are always displayed.
 
+### Production usage breakdown (`/production/usage-breakdown`)
+- New report guarded by the `production.usage_breakdown` permission: choose a pipeline and usage date, then see every stage as a table column with the SKU code, description and usage recorded under it for that date.
+- The query is workspace-scoped, excludes cancelled lines, sums repeated SKU/stage lines, and returns stages in pipeline sequence.
+- Added sidebar, global-search, breadcrumb and route-permission wiring, plus `20261127_production_usage_breakdown_permission.sql` (system roles receive the permission by default).
+
 ### Usage audit trail
 - New `production_usage_changelog` table records `created`, `updated`, `cancelled`, `restored`, `import`, `submitter_updated`, and `submitter_cancelled` actions with previous/new values, actor, timestamp, and reason.
 - `getProductionUsageChangelog` action and a history dialog in the editor.

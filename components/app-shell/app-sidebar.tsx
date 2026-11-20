@@ -289,6 +289,7 @@ export const navSections: NavSection[] = [
         anyPermission: [
           PERMISSIONS.PRODUCTION_VIEW,
           PERMISSIONS.PRODUCTION_EDITOR,
+          PERMISSIONS.PRODUCTION_USAGE_BREAKDOWN,
         ],
         children: [
           {
@@ -315,6 +316,11 @@ export const navSections: NavSection[] = [
             title: "All usage",
             href: "/production/usage",
             permission: PERMISSIONS.PRODUCTION_VIEW,
+          },
+          {
+            title: "Usage breakdown",
+            href: "/production/usage-breakdown",
+            permission: PERMISSIONS.PRODUCTION_USAGE_BREAKDOWN,
           },
           {
             title: "Usage editor",

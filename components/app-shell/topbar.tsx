@@ -63,6 +63,7 @@ const segmentLabels: Record<string, string> = {
   pipelines: "Pipelines",
   stages: "Stages",
   usage: "Usage",
+  "usage-breakdown": "Usage breakdown",
   "usage-editor": "Usage editor",
   "usage-settings": "Usage settings",
   visits: "Visits",
