@@ -177,6 +177,19 @@ export type UsageWindow = {
   endDate: Date
 }
 
+/**
+ * The calendar date (as a `Date`) of the last usage day that is already locked
+ * for submitters: the day before the allowed window's first day. Displayed on
+ * the usage settings form as "locks usage dated on or before …".
+ */
+export function cutoffInstant(
+  settings: UsageSettings,
+  now = new Date()
+): Date {
+  const start = businessDate(settings, now)
+  return calendarDateToDate(addDays(start, -1))
+}
+
 /** The allowed usage-date window: business day through business day + cutoffDays. */
 export function usageWindow(
   settings: UsageSettings,

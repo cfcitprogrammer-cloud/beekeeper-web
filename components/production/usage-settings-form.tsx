@@ -24,11 +24,7 @@ import {
   type UsageSettings,
 } from "@/lib/production/usage-status"
 
-export function UsageSettingsForm({
-  settings,
-}: {
-  settings: UsageSettings
-}) {
+export function UsageSettingsForm({ settings }: { settings: UsageSettings }) {
   const router = useRouter()
   const [saving, setSaving] = React.useState(false)
   const [draft, setDraft] = React.useState(() => ({
@@ -90,8 +86,8 @@ export function UsageSettingsForm({
         <CardHeader className="border-b">
           <CardTitle>Usage lifecycle</CardTitle>
           <CardDescription>
-            Configure when submitted usage locks and what submitters are
-            allowed to do.
+            Configure when submitted usage locks and what submitters are allowed
+            to do.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -207,10 +203,10 @@ export function UsageSettingsForm({
         </CardHeader>
         <CardContent className="space-y-3 text-xs">
           <div>
-            <p className="text-[0.625rem] text-muted-foreground">Locks usage dated</p>
-            <p className="font-medium">
-              on or before {formatDate(cutoff)}
+            <p className="text-[0.625rem] text-muted-foreground">
+              Locks usage dated
             </p>
+            <p className="font-medium">on or before {formatDate(cutoff)}</p>
           </div>
           <div>
             <p className="text-[0.625rem] text-muted-foreground">At</p>

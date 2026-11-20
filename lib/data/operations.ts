@@ -546,20 +546,41 @@ export async function getProductionUsageSettings(): Promise<
   const supabase = await createClient()
   const access = await getAccessContext()
   const companyId = access.companyId
+  const workspaceId = access.workspaceId
 
-  // Settings are stored once per company. Without the company filter a user
-  // who belongs to more than one company could load another company's row,
-  // making saves appear to have no effect.
   if (!companyId) return empty(null)
 
-  const { data, error } = await supabase
-    .from("production_usage_settings")
-    .select("*")
-    .eq("company_id", companyId)
-    .maybeSingle()
+  let data: ProductionUsageSettings | null = null
 
-  logError("production-usage-settings", error)
-  if (error || !data) return empty(null)
+  if (workspaceId) {
+    const { data: exact, error } = await supabase
+      .from("production_usage_settings")
+      .select("*")
+      .eq("company_id", companyId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle()
+    if (error) {
+      logError("production-usage-settings", error)
+      return empty(null)
+    }
+    data = (exact as ProductionUsageSettings | null) ?? null
+  }
+
+  if (!data) {
+    const { data: companyWide, error } = await supabase
+      .from("production_usage_settings")
+      .select("*")
+      .eq("company_id", companyId)
+      .is("workspace_id", null)
+      .maybeSingle()
+    if (error) {
+      logError("production-usage-settings", error)
+      return empty(null)
+    }
+    data = (companyWide as ProductionUsageSettings | null) ?? null
+  }
+
+  if (!data) return empty(null)
   return empty(data as ProductionUsageSettings)
 }
 

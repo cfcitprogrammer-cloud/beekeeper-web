@@ -54,19 +54,40 @@ type UsageChangelogInput = {
 async function loadUsageSettings(
   supabase: UsageActionSupabase,
   companyId: string,
+  workspaceId: string | null,
   timeZone?: string | null
 ): Promise<UsageSettings> {
-  const { data, error } = await supabase
-    .from("production_usage_settings")
-    .select("*")
-    .eq("company_id", companyId)
-    .maybeSingle()
+  let row: ProductionUsageSettings | null = null
 
-  if (error) {
-    console.error("[action:loadUsageSettings]", error)
-    return toUsageSettings(null, timeZone)
+  if (workspaceId) {
+    const { data, error } = await supabase
+      .from("production_usage_settings")
+      .select("*")
+      .eq("company_id", companyId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle()
+    if (error) {
+      console.error("[action:loadUsageSettings]", error)
+    } else {
+      row = (data as ProductionUsageSettings | null) ?? null
+    }
   }
-  return toUsageSettings((data as ProductionUsageSettings | null) ?? null, timeZone)
+
+  if (!row) {
+    const { data, error } = await supabase
+      .from("production_usage_settings")
+      .select("*")
+      .eq("company_id", companyId)
+      .is("workspace_id", null)
+      .maybeSingle()
+    if (error) {
+      console.error("[action:loadUsageSettings]", error)
+    } else {
+      row = (data as ProductionUsageSettings | null) ?? null
+    }
+  }
+
+  return toUsageSettings(row, timeZone)
 }
 
 /**
@@ -1025,7 +1046,7 @@ export async function createProductionUsage(
   // unless the company configuration allows them. A line only counts as a
   // duplicate while it is active: when every existing line for that SKU on the
   // date is cancelled, the user may submit the SKU again.
-  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
+  const settings = await loadUsageSettings(supabase, companyId, workspaceId, companyTimezone)
 
   // The allowed window applies to everyone, including usage editors: a usage
   // date may only be submitted from the current business day through
@@ -1290,6 +1311,9 @@ export async function updateProductionUsageSettings(
   if ("error" in authorized) return authorized.error
 
   const { supabase, companyId, workspaceId, userId } = authorized.context
+  if (!workspaceId) {
+    return failure("No workspace is associated with your account.")
+  }
   const now = new Date().toISOString()
 
   const { data, error } = await supabase
@@ -1297,6 +1321,7 @@ export async function updateProductionUsageSettings(
     .upsert(
       {
         company_id: companyId,
+        workspace_id: workspaceId,
         cutoff_days: cutoffDays,
         cutoff_time: `${normalizeTime(input.cutoffTime)}:00`,
         allow_submitter_edit: Boolean(input.allowSubmitterEdit),
@@ -1304,7 +1329,7 @@ export async function updateProductionUsageSettings(
         updated_by: userId,
         updated_at: now,
       },
-      { onConflict: "company_id" }
+      { onConflict: "company_id,workspace_id" }
     )
     .select("id")
     .single()
@@ -1369,7 +1394,7 @@ export async function updateProductionUsageLines(input: {
 
   const { supabase, companyId, workspaceId, userId, companyTimezone } =
     authorized.context
-  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
+  const settings = await loadUsageSettings(supabase, companyId, workspaceId, companyTimezone)
   const ids = Array.from(new Set(lines.map((line) => line.id)))
 
   type ExistingUsageRow = {
@@ -1535,7 +1560,7 @@ export async function setProductionUsageStatus(input: {
 
   const { supabase, companyId, workspaceId, userId, companyTimezone } =
     authorized.context
-  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
+  const settings = await loadUsageSettings(supabase, companyId, workspaceId, companyTimezone)
 
   type StatusRow = {
     id: string
@@ -1688,7 +1713,7 @@ export async function updateOwnProductionUsage(input: {
 
   const { supabase, companyId, workspaceId, userId, companyTimezone } =
     authorized.context
-  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
+  const settings = await loadUsageSettings(supabase, companyId, workspaceId, companyTimezone)
   if (!settings.allowSubmitterEdit) {
     return failure(
       "Submitter edits are disabled. Ask an administrator to enable them in the usage settings."
@@ -2232,7 +2257,7 @@ export async function importProductionUsageUpdates(input: {
     )
   )
 
-  const settings = await loadUsageSettings(supabase, companyId, companyTimezone)
+  const settings = await loadUsageSettings(supabase, companyId, workspaceId, companyTimezone)
 
   const [pipelinesResult, stagesResult, skusResult, assignmentsResult] =
     await Promise.all([

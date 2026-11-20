@@ -229,7 +229,7 @@ export function UsageManager({
     if (meta.active === 0) return
 
     if (
-      !window.confirm(
+      !globalThis.confirm(
         "Mark this usage as a cancellation? BOM components in the same usage entry are cancelled too. This is recorded in the usage changelog."
       )
     ) {
@@ -270,7 +270,7 @@ export function UsageManager({
     if (meta.cancelled === 0) return
 
     if (
-      !window.confirm(
+      !globalThis.confirm(
         "Restore this usage to submitted? BOM components in the same usage entry are restored too."
       )
     ) {
